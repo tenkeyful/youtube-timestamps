@@ -26,6 +26,7 @@ TODO: will do the low-hanging fruits first
 - [ ] Refactor codebase to make development easier (and migrate some of the consts at the top in `content.js` to `content.css`; it's a hot mess 😵‍💫).
 - [ ] Make some UI adjustments in `content.css` and `options.html`.
 
+> Others: [CommentSync](https://chromewebstore.google.com/detail/commentsync-real-time-you/kbpgpkfoengiobcokbjidbnjldjldboj) (not the Firefox one of the same name)
 ---
 
 test what Innertube returns (`node [FILE_NAME].mjs`)
