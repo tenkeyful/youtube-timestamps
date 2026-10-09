@@ -3,7 +3,7 @@
     "name": "YouTube Timestamps",
     "description": "Shows comments on the progress bar and video.",
     "author": "Nhân Trí",
-    "homepage_url": "https://github.com/nhantrichuyenanh/youtube-timestamps",
+    "homepage_url": "https://github.com/tenkeyful/youtube-timestamps",
     "version": "1.1.7",
     "permissions": ["declarativeNetRequestWithHostAccess", "storage"],
     "host_permissions": ["https://www.youtube.com/watch?*"],
