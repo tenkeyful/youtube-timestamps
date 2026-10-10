@@ -17,6 +17,7 @@ TODO: will do the low-hanging fruits first
 - [ ] Current method of showing comments is [Discord-esque](https://www.reddit.com/r/discordapp/comments/1j746ke/new_overlay_notification_please_tell_me_how_to/). Maybe add a new option to change it to [Soundcloud-esque](https://assemblethenoise.wordpress.com/2014/06/21/a-soundcloud-comments-experiment/).
 - [ ] Fix preview and comment overlays with formatted text (bold, italic, strikethrough) rendering as normal text.
 - [ ] Fix miniplayer breaking add-on.
+- [ ] Add attention indicator to the playing YouTube tab every time a new comment overlay appears if user isn't in that tab.
 - [ ] Fix YouTube's custom emojis not rendering as images (because YouTube treats Unicode and custom emojis as images) but as text.
 - [x] Add support for replies.
 - [ ] Add option to exclude replies.
