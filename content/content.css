@@ -1,336 +1,360 @@
 .ytp-timed-markers-container {
-    z-index: 200;
+	z-index: 200;
 }
 
 .__youtube-timestamps__bar {
-    width: 100%;
-    height: 100%;
-    position: absolute;
-    transform: scaleX(1);
-    z-index: 500;
+	width: 100%;
+	height: 100%;
+	position: absolute;
+	transform: scaleX(1);
+	z-index: 500;
 }
 
 .__youtube-timestamps__stamp {
-    background: rgba(255, 255, 255, 0.3);
-    height: 100%;
-    min-width: 2px;
-    max-width: 4px;
-    width: 0.4%;
-    position: fixed;
-    border-radius: 1px;
-    z-index: 501;
-    transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    box-shadow: 0 0 0 rgba(255, 255, 255, 0.2);
-    cursor: pointer;
+	background: rgba(255, 255, 255, 0.3);
+	height: 100%;
+	min-width: 2px;
+	max-width: 4px;
+	width: 0.4%;
+	position: fixed;
+	border-radius: 1px;
+	z-index: 501;
+	transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+	box-shadow: 0 0 0 rgba(255, 255, 255, 0.2);
+	cursor: pointer;
 }
 
 .__youtube-timestamps__stamp:hover {
-    transform: scaleY(1.3) scaleX(1.2);
-    box-shadow: 0 0 4px rgba(255, 255, 255, 0.4);
-    background: rgba(255, 255, 255, 0.7);
+	transform: scaleY(1.3) scaleX(1.2);
+	box-shadow: 0 0 4px rgba(255, 255, 255, 0.4);
+	background: rgba(255, 255, 255, 0.7);
 }
 
 .__youtube-timestamps__stamp--multiple {
-    background: rgba(255, 255, 255, 0.85);
-    min-width: 3px;
-    max-width: 6px;
-    width: 0.6%;
-    box-shadow: 0 0 3px rgba(255, 255, 255, 0.4);
+	background: rgba(255, 255, 255, 0.85);
+	min-width: 3px;
+	max-width: 6px;
+	width: 0.6%;
+	box-shadow: 0 0 3px rgba(255, 255, 255, 0.4);
 }
 
 .__youtube-timestamps__stamp--multiple:hover {
-    transform: scaleY(1.4) scaleX(1.3);
-    box-shadow: 0 0 6px rgba(255, 255, 255, 0.9);
-    background: rgba(255, 255, 255, 0.8);
+	transform: scaleY(1.4) scaleX(1.3);
+	box-shadow: 0 0 6px rgba(255, 255, 255, 0.9);
+	background: rgba(255, 255, 255, 0.8);
 }
 
 .__youtube-timestamps__preview-wrapper {
-    position: relative;
-    left: 50%;
+	position: relative;
+	left: 50%;
 }
 
 .__youtube-timestamps__preview {
-    position: absolute;
-    overflow: hidden;
-    border-radius: 12px;
-    bottom: 0;
-    box-sizing: border-box;
-    padding: 16px;
-    opacity: 0;
-    animation: fadeInUp 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
-    z-index: 9999;
+	position: absolute;
+	overflow: hidden;
+	border-radius: 12px;
+	bottom: 0;
+	box-sizing: border-box;
+	padding: 16px;
+	opacity: 0;
+	animation: fadeInUp 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+	z-index: 9999;
 }
 
 @keyframes fadeInUp {
-    to {
-        transform: translateY(0) scale(1);
-        opacity: 1;
-    }
+	to {
+		transform: translateY(0) scale(1);
+		opacity: 1;
+	}
 }
 
 .__youtube-timestamps__preview__author {
-    display: flex;
-    align-items: center;
-    margin-bottom: 12px;
+	display: flex;
+	align-items: center;
+	margin-bottom: 12px;
 }
 
 .__youtube-timestamps__preview__avatar {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    border: 0px solid;
+	width: 24px;
+	height: 24px;
+	border-radius: 50%;
+	border: 0px solid;
 }
 
 .__youtube-timestamps__preview__name {
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 1.4;
-    margin-left: 10px;
-    letter-spacing: 0.2px;
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1.4;
+	margin-left: 10px;
+	letter-spacing: 0.2px;
 }
 
 .__youtube-timestamps__preview__text {
-    margin-bottom: 12px;
-    font-size: 13px;
-    font-weight: 400;
-    line-height: 1.5;
-    letter-spacing: 0.1px;
-    white-space: pre-line;
-    word-wrap: break-word;
-    overflow-y: auto;
-    scroll-behavior: smooth;
+	margin-bottom: 12px;
+	font-size: 13px;
+	font-weight: 400;
+	line-height: 1.5;
+	letter-spacing: 0.1px;
+	white-space: pre-line;
+	word-wrap: break-word;
+	overflow-y: auto;
+	scroll-behavior: smooth;
 }
 
 .__youtube-timestamps__preview__text-stamp {
-    color: var(--yt-spec-call-to-action);
-    font-weight: 600;
-    background: rgb(from var(--yt-spec-call-to-action) r g b / 0.1);
-    padding: 2px 4px;
-    border-radius: 4px;
-    border: 1px solid rgb(from var(--yt-spec-call-to-action) r g b / 0.2);
-    transition: all 0.2s ease;
-    display: inline-block;
+	color: var(--yt-sys-color-baseline--call-to-action);
+	font-weight: 600;
+	background: rgb(
+		from var(--yt-sys-color-baseline--call-to-action) r g b / 0.1
+	);
+	padding: 2px 4px;
+	border-radius: 4px;
+	border: 1px solid
+		rgb(from var(--yt-sys-color-baseline--call-to-action) r g b / 0.2);
+	transition: all 0.2s ease;
+	display: inline-block;
 }
 
 .__youtube-timestamps__preview__nav {
-    background: rgb(from var(--yt-spec-call-to-action) r g b / 0.15);
-    border: 1px solid rgb(from var(--yt-spec-call-to-action) r g b / 0.3);
-    border-radius: 8px;
-    padding: 6px 12px;
-    margin: 8px 0 0;
-    font-size: 12px;
-    color: var(--yt-spec-call-to-action);
-    font-weight: 600;
-    text-align: center;
-    letter-spacing: 0.2px;
-    display: block;
-    width: calc(100% - 32px);
-    max-width: 420px;
-    margin-left: auto;
-    margin-right: auto;
-    box-sizing: border-box;
+	background: rgb(
+		from var(--yt-sys-color-baseline--call-to-action) r g b / 0.15
+	);
+	border: 1px solid
+		rgb(from var(--yt-sys-color-baseline--call-to-action) r g b / 0.3);
+	border-radius: 8px;
+	padding: 6px 12px;
+	margin: 8px 0 0;
+	font-size: 12px;
+	color: var(--yt-sys-color-baseline--call-to-action);
+	font-weight: 600;
+	text-align: center;
+	letter-spacing: 0.2px;
+	display: block;
+	width: calc(100% - 32px);
+	max-width: 420px;
+	margin-left: auto;
+	margin-right: auto;
+	box-sizing: border-box;
 }
 
 .__youtube-timestamps__overlay-container {
-    position: absolute;
-    top: 15px;
-    left: 6px;
-    width: auto;
-    height: auto;
-    pointer-events: none;
-    z-index: 1000;
-    overflow: visible;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+	position: absolute;
+	top: 15px;
+	left: 6px;
+	width: auto;
+	height: auto;
+	pointer-events: none;
+	z-index: 1000;
+	overflow: visible;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
 }
 
 .__youtube-timestamps__live-overlay {
-    position: relative;
-    left: 12px;
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    border-radius: 12px;
-    padding: 10px 12px;
-    max-width: 320px;
-    min-width: 220px;
-    backdrop-filter: blur(8px);
-    opacity: 0;
-    transform: translateY(-20px);
-    transition: transform 0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.32s ease;
-    pointer-events: auto;
-    box-sizing: border-box;
-    will-change: transform, opacity, top;
+	position: relative;
+	left: 12px;
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	border-radius: 12px;
+	padding: 10px 12px;
+	max-width: 320px;
+	min-width: 220px;
+	backdrop-filter: blur(8px);
+	opacity: 0;
+	transform: translateY(-20px);
+	transition:
+		transform 0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+		opacity 0.32s ease;
+	pointer-events: auto;
+	box-sizing: border-box;
+	will-change: transform, opacity, top;
 }
 
 .__youtube-timestamps__live-overlay:hover {
-    transform: translateY(0) translateZ(0);
-    box-shadow:
-        0 12px 44px rgba(0, 0, 0, 0.45),
-        0 6px 18px rgba(0, 0, 0, 0.25);
+	transform: translateY(0) translateZ(0);
+	box-shadow:
+		0 12px 44px rgba(0, 0, 0, 0.45),
+		0 6px 18px rgba(0, 0, 0, 0.25);
 }
 
 .__youtube-timestamps__live-overlay__avatar {
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    object-fit: cover;
-    background: rgba(255, 255, 255, 0.06);
-    border: 0px solid;
-    flex-shrink: 0;
+	width: 44px;
+	height: 44px;
+	border-radius: 50%;
+	object-fit: cover;
+	background: rgba(255, 255, 255, 0.06);
+	border: 0px solid;
+	flex-shrink: 0;
 }
 
 .__youtube-timestamps__live-overlay__content {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    min-width: 0;
-    color: #fff;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+	color: #fff;
 }
 
 .__youtube-timestamps__live-overlay__author {
-    font-weight: 700;
-    font-size: 13px;
-    line-height: 1.1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+	font-weight: 700;
+	font-size: 13px;
+	line-height: 1.1;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .__youtube-timestamps__live-overlay__text {
-    font-size: 13px;
-    font-weight: 400;
-    line-height: 1.3;
-    overflow-y: auto;
-    max-height: 120px;
-    word-wrap: break-word;
-    white-space: pre-wrap;
-    scroll-behavior: smooth;
-    position: relative;
+	font-size: 13px;
+	font-weight: 400;
+	line-height: 1.3;
+	overflow-y: auto;
+	max-height: 120px;
+	word-wrap: break-word;
+	white-space: pre-wrap;
+	scroll-behavior: smooth;
+	position: relative;
 }
 
 .__youtube-timestamps__live-overlay__text-scroll-shadow {
-    position: sticky;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 28px;
-    margin-top: -28px;
-    pointer-events: none;
-    flex-shrink: 0;
-    border-radius: 0 0 4px 4px;
-    background: linear-gradient(to bottom, transparent, var(--yt-spec-base-background));
-    transition: opacity 0.2s ease;
+	position: sticky;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	height: 28px;
+	margin-top: -28px;
+	pointer-events: none;
+	flex-shrink: 0;
+	border-radius: 0 0 4px 4px;
+	background: linear-gradient(
+		to bottom,
+		transparent,
+		var(--yt-sys-color-baseline--base-background)
+	);
+	transition: opacity 0.2s ease;
 }
 
 .__youtube-timestamps__live-overlay__text-stamp {
-    color: var(--yt-spec-call-to-action);
-    font-weight: 600;
-    background: rgb(from var(--yt-spec-call-to-action) r g b / 0.1);
-    padding: 2px 4px;
-    border-radius: 4px;
-    border: 1px solid rgb(from var(--yt-spec-call-to-action) r g b / 0.2);
-    transition: all 0.2s ease;
-    display: inline-block;
-    text-decoration: none;
-    cursor: pointer;
+	color: var(--yt-sys-color-baseline--call-to-action);
+	font-weight: 600;
+	background: rgb(
+		from var(--yt-sys-color-baseline--call-to-action) r g b / 0.1
+	);
+	padding: 2px 4px;
+	border-radius: 4px;
+	border: 1px solid
+		rgb(from var(--yt-sys-color-baseline--call-to-action) r g b / 0.2);
+	transition: all 0.2s ease;
+	display: inline-block;
+	text-decoration: none;
+	cursor: pointer;
 }
 
 .__youtube-timestamps__live-overlay__text-stamp:hover {
-    background: rgb(from var(--yt-spec-call-to-action) r g b / 0.2);
-    border-color: rgb(from var(--yt-spec-call-to-action) r g b / 0.4);
-    box-shadow: 0 2px 4px rgba(var(--yt-spec-call-to-action), 0.2);
+	background: rgb(
+		from var(--yt-sys-color-baseline--call-to-action) r g b / 0.2
+	);
+	border-color: rgb(
+		from var(--yt-sys-color-baseline--call-to-action) r g b / 0.4
+	);
+	box-shadow: 0 2px 4px rgba(var(--yt-sys-color-baseline--call-to-action), 0.2);
 }
 
 .__youtube-timestamps__live-overlay__text-stamp:focus {
-    outline: none;
-    background: rgb(from var(--yt-spec-call-to-action) r g b / 0.25);
-    border-color: rgb(from var(--yt-spec-call-to-action) r g b / 0.5);
-    box-shadow: 0 0 0 2px rgb(from var(--yt-spec-call-to-action) r g b / 0.3);
+	outline: none;
+	background: rgb(
+		from var(--yt-sys-color-baseline--call-to-action) r g b / 0.25
+	);
+	border-color: rgb(
+		from var(--yt-sys-color-baseline--call-to-action) r g b / 0.5
+	);
+	box-shadow: 0 0 0 2px
+		rgb(from var(--yt-sys-color-baseline--call-to-action) r g b / 0.3);
 }
 
 .__youtube-timestamps__live-overlay.show {
-    opacity: 1;
-    transform: translateY(0);
+	opacity: 1;
+	transform: translateY(0);
 }
 
 /* LIGHT MODE */
 @media (prefers-color-scheme: light) {
-    .__youtube-timestamps__preview {
-        background: var(--yt-spec-base-background);
-        border: 2px solid rgba(0, 0, 0, 0.1);
-        box-shadow:
-            0 8px 32px rgba(0, 0, 0, 0.15),
-            0 2px 8px rgba(0, 0, 0, 0.1);
-    }
+	.__youtube-timestamps__preview {
+		background: var(--yt-sys-color-baseline--base-background);
+		border: 2px solid rgba(0, 0, 0, 0.1);
+		box-shadow:
+			0 8px 32px rgba(0, 0, 0, 0.15),
+			0 2px 8px rgba(0, 0, 0, 0.1);
+	}
 
-    .__youtube-timestamps__preview__name {
-        color: #0f0f0f;
-    }
+	.__youtube-timestamps__preview__name {
+		color: #0f0f0f;
+	}
 
-    .__youtube-timestamps__preview__text {
-        color: rgba(15, 15, 15, 0.9);
-    }
+	.__youtube-timestamps__preview__text {
+		color: rgba(15, 15, 15, 0.9);
+	}
 
-    .__youtube-timestamps__live-overlay {
-        background: var(--yt-spec-base-background);
-        border: 1px solid rgba(0, 0, 0, 0.1);
-        box-shadow:
-            0 8px 32px rgba(0, 0, 0, 0.15),
-            0 4px 12px rgba(0, 0, 0, 0.1);
-    }
+	.__youtube-timestamps__live-overlay {
+		background: var(--yt-sys-color-baseline--base-background);
+		border: 1px solid rgba(0, 0, 0, 0.1);
+		box-shadow:
+			0 8px 32px rgba(0, 0, 0, 0.15),
+			0 4px 12px rgba(0, 0, 0, 0.1);
+	}
 
-    .__youtube-timestamps__live-overlay__author {
-        color: #0f0f0f;
-    }
+	.__youtube-timestamps__live-overlay__author {
+		color: #0f0f0f;
+	}
 
-    .__youtube-timestamps__live-overlay__text {
-        color: rgba(15, 15, 15, 0.9);
-    }
+	.__youtube-timestamps__live-overlay__text {
+		color: rgba(15, 15, 15, 0.9);
+	}
 }
 
 /* DARK MODE */
 .dark .__youtube-timestamps__preview,
 [dark] .__youtube-timestamps__preview,
 html[dark] .__youtube-timestamps__preview {
-    background: var(--yt-spec-base-background);
-    border: 2px solid rgba(255, 255, 255, 0.1);
-    box-shadow:
-        0 8px 32px rgba(0, 0, 0, 0.15),
-        0 2px 8px rgba(0, 0, 0, 0.1);
+	background: var(--yt-sys-color-baseline--base-background);
+	border: 2px solid rgba(255, 255, 255, 0.1);
+	box-shadow:
+		0 8px 32px rgba(0, 0, 0, 0.15),
+		0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .dark .__youtube-timestamps__preview__name,
 [dark] .__youtube-timestamps__preview__name,
 html[dark] .__youtube-timestamps__preview__name {
-    color: #ffffff;
+	color: #ffffff;
 }
 
 .dark .__youtube-timestamps__preview__text,
 [dark] .__youtube-timestamps__preview__text,
 html[dark] .__youtube-timestamps__preview__text {
-    color: rgba(255, 255, 255, 0.95);
+	color: rgba(255, 255, 255, 0.95);
 }
 
 .dark .__youtube-timestamps__live-overlay,
 [dark] .__youtube-timestamps__live-overlay,
 html[dark] .__youtube-timestamps__live-overlay {
-    background: var(--yt-spec-base-background);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow:
-        0 8px 32px rgba(0, 0, 0, 0.35),
-        0 4px 12px rgba(0, 0, 0, 0.18);
+	background: var(--yt-sys-color-baseline--base-background);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	box-shadow:
+		0 8px 32px rgba(0, 0, 0, 0.35),
+		0 4px 12px rgba(0, 0, 0, 0.18);
 }
 
 .dark .__youtube-timestamps__live-overlay__author,
 [dark] .__youtube-timestamps__live-overlay__author,
 html[dark] .__youtube-timestamps__live-overlay__author {
-    color: #ffffff;
+	color: #ffffff;
 }
 
 .dark .__youtube-timestamps__live-overlay__text,
 [dark] .__youtube-timestamps__live-overlay__text,
 html[dark] .__youtube-timestamps__live-overlay__text {
-    color: rgba(255, 255, 255, 0.92);
+	color: rgba(255, 255, 255, 0.92);
 }

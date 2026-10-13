@@ -1,49 +1,66 @@
 {
-    "manifest_version": 3,
-    "name": "YouTube Timestamps",
-    "description": "Shows comments on the progress bar and video.",
-    "author": "Nhân Trí",
-    "homepage_url": "https://github.com/tenkeyful/youtube-timestamps",
-    "version": "1.1.7",
-    "permissions": ["declarativeNetRequestWithHostAccess", "storage"],
-    "host_permissions": ["https://www.youtube.com/watch?*"],
-    "icons": {
-      "16": "icon.png",
-      "32": "icon.png",
-      "48": "icon.png",
-      "64": "icon.png",
-      "128": "icon.png",
-      "256": "icon.png"
-    },
-    "background": {
-        "scripts": ["background/background.js"],
-        "type": "module"
-    },
-    "options_ui": {
-      "page": "options/options.html",
-      "open_in_tab": false
-    },
-    "content_scripts": [
-      {
-        "matches": ["https://www.youtube.com/*"],
-        "js": ["content/content.js"],
-        "css": ["content/content.css"]
-      }
+  "manifest_version": 3,
+  "name": "YouTube Timestamps",
+  "description": "Shows comments on the progress bar and video.",
+  "author": "winedows",
+  "homepage_url": "https://github.com/tenkeyful/youtube-timestamps",
+  "version": "1.2.0",
+  "permissions": [
+    "declarativeNetRequestWithHostAccess",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.youtube.com/watch?*"
+  ],
+  "icons": {
+    "16": "icon.png",
+    "32": "icon.png",
+    "48": "icon.png",
+    "64": "icon.png",
+    "128": "icon.png",
+    "256": "icon.png"
+  },
+  "background": {
+    "scripts": [
+      "background/background.js"
     ],
-    "declarative_net_request": {
-      "rule_resources": [
-        {
-          "id": "ruleset_1",
-          "enabled": true,
-          "path": "rules.json"
-        }
+    "type": "module"
+  },
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": false
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "content/content.js"
+      ],
+      "css": [
+        "content/content.css"
       ]
-    },
-    "browser_specific_settings": {
-      "gecko": {
-        "id": "{693ae423-2df0-439e-aefd-9e821ebb08ef}",
-        "strict_min_version": "140.0",
-        "data_collection_permissions": { "required": ["none"] }
+    }
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "ruleset_1",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "{693ae423-2df0-439e-aefd-9e821ebb08ef}",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
       }
     }
+  }
 }
