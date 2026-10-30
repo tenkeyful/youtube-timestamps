@@ -1,10 +1,10 @@
 TODO: will do the low-hanging fruits first
-- [ ] Add options to remove timestamps and/or comment overlays with n amount of timestamps to root out all certain comments that list out chapters, this moment, etc... which could clog up visual space and be unnecessary.
+- [x] Add options to remove timestamps and/or comment overlays with n amount of timestamps to root out all certain comments that list out chapters, this moment, etc... which could clog up visual space and be unnecessary.
 - [x] Only current timestamp glows when a comment overlay has multiple timestamps.
 - [x] Make comment overlays that are long scroll to display more text, similar to preview.
 - [ ] Somehow make a way for long comment overlays wait a bit more before disappearing, or let user manually "swipe" or something to hide them...
-- [ ] Add options to change comment overlay position from top left to other directions.
-- [ ] Add options to change comment overlay size.
+- [x] Add options to change comment overlay position from top left to other directions.
+- [x] Add options to change comment overlay size.
 - [ ] Comment overlay's width changes in uniform with other comment overlays (I might reconsider this).
 - [x] When in full screen and scrolling through a timestamp, add-on should still scroll that timestamp instead of YouTube's More videos.
 - [ ] Add a button next to video controls to quickly show/hide comment overlays (could conflict with other add-ons that add their own buttons, might find another solution).
@@ -15,12 +15,12 @@ TODO: will do the low-hanging fruits first
 - [ ] Keyboard shortcuts to navigate between each timestamps and comment overlays within them. Maybe?
 - [ ] Remove "Pull up for precise thinking". Maybe.
 - [ ] Current method of showing comments is [Discord-esque](https://www.reddit.com/r/discordapp/comments/1j746ke/new_overlay_notification_please_tell_me_how_to/). Maybe add a new option to change it to [Soundcloud-esque](https://assemblethenoise.wordpress.com/2014/06/21/a-soundcloud-comments-experiment/).
-- [ ] Fix preview and comment overlays with formatted text (bold, italic, strikethrough) rendering as normal text.
-- [ ] Fix miniplayer breaking add-on.
+- [x] Fix preview and comment overlays with formatted text (bold, italic, strikethrough) rendering as normal text.
+- [x] Fix miniplayer breaking add-on.
 - [ ] Add attention indicator to the playing YouTube tab every time a new comment overlay appears if user isn't in that tab.
-- [ ] Fix YouTube's custom emojis not rendering as images (because YouTube treats Unicode and custom emojis as images) but as text.
+- [x] Fix YouTube's custom emojis not rendering as images (because YouTube treats Unicode and custom emojis as images) but as text.
 - [x] Add support for replies.
-- [ ] Add option to exclude replies.
+- [x] Add option to exclude replies.
 - [x] Remove support for embedded videos (`/embed`).
 - [ ] Give users the ability to choose between Innertube and YouTube Data API. Innertube is "plug-and-play" but can only fetch the first `maxResults` comments and replies, while YouTube Data API requires users to input their key through Google Cloud Console but fetches all comments of a video.
 > Material/Reference: [Youtube Timeline](https://chromewebstore.google.com/detail/jjhifobmdjhlphmilfmemefedpkmhdnb), [TimeComments](https://chromewebstore.google.com/detail/djcmgmddnajefejhjhfhlfljoofplmlo), [CommenTime](https://addons.mozilla.org/addon/commentime)
