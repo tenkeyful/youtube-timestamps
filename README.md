@@ -1,4 +1,4 @@
-TODO: will do the low-hanging fruits first
+TODO: this codebase is beyond saving 😭
 - [x] Add options to remove timestamps and/or comment overlays with n amount of timestamps to root out all certain comments that list out chapters, this moment, etc... which could clog up visual space and be unnecessary.
 - [x] Only current timestamp glows when a comment overlay has multiple timestamps.
 - [x] Make comment overlays that are long scroll to display more text, similar to preview.
@@ -8,19 +8,18 @@ TODO: will do the low-hanging fruits first
 - [x] When in full screen and scrolling through a timestamp, add-on should still scroll that timestamp instead of YouTube's More videos.
 - [x] Fix 1 of n comment (comments that share a timestamp) UI clipping at the bottom (not perfect but will fix it again).
 - [x] Fix add-on not appearing unless user manually refresh YouTube tab once (fuck YouTube SPA).
-- [ ] Make comment overlay change size when video is in normal/full screen/miniplayer.
+- [x] Make comment overlay change size when video is in normal/full screen.
 - [ ] Show other data like display name, likes, replies, etc... and options to show/hide them the options menu. Maybe? ([return-yt-comment-usernames](https://github.com/Frank0945/return-yt-comment-usernames/blob/main/src/injected.ts), view code below)
 - [ ] Remove "Pull up for precise thinking". Maybe.
-- [ ] Current method of showing comments is [Discord-esque](https://www.reddit.com/r/discordapp/comments/1j746ke/new_overlay_notification_please_tell_me_how_to/). Maybe add a new option to change it to [Soundcloud-esque](https://assemblethenoise.wordpress.com/2014/06/21/a-soundcloud-comments-experiment/).
+- [ ] Current method of showing comments is [Discord-esque](https://www.reddit.com/r/discordapp/comments/1j746ke/new_overlay_notification_please_tell_me_how_to/). Maybe add a new option to change it to [Soundcloud-esque](https://assemblethenoise.wordpress.com/2014/06/21/a-soundcloud-comments-experiment/)? (but it would mean i have to somehow make the seek/progress bar visible!)
 - [x] Fix preview and comment overlays with formatted text (bold, italic, strikethrough) rendering as normal text.
 - [x] Fix miniplayer breaking add-on.
 - [x] Fix YouTube's custom emojis not rendering as images (because YouTube treats Unicode and custom emojis as images) but as text.
-- [x] Add support for replies.
-- [x] Add option to exclude replies.
+- [x] Add support for replies and option to exclude them.
 - [x] Remove support for embedded videos (`/embed`).
 - [ ] Give users the ability to choose between Innertube and YouTube Data API. Innertube is "plug-and-play" but can only fetch the first `maxResults` comments and replies, while YouTube Data API requires users to input their key through Google Cloud Console but fetches all comments of a video.
-> Material/Reference: [Youtube Timeline](https://chromewebstore.google.com/detail/jjhifobmdjhlphmilfmemefedpkmhdnb), [TimeComments](https://chromewebstore.google.com/detail/djcmgmddnajefejhjhfhlfljoofplmlo), [CommenTime](https://addons.mozilla.org/addon/commentime)
 - [ ] Checks the fist `maxResults` comments for timestamps... what if it checks for all comments and only get the first `maxResults` of those comments?
+> Material/Reference: [Youtube Timeline](https://chromewebstore.google.com/detail/jjhifobmdjhlphmilfmemefedpkmhdnb), [TimeComments](https://chromewebstore.google.com/detail/djcmgmddnajefejhjhfhlfljoofplmlo), [CommenTime](https://addons.mozilla.org/addon/commentime)
 - [ ] Refactor codebase to make development easier (and migrate some of the consts at the top in `content.js` to `content.css`; it's a hot mess 😵‍💫).
 - [ ] Make some UI adjustments in `content.css` and `options.html`.
 
