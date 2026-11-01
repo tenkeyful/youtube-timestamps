@@ -29,8 +29,7 @@ TODO: this codebase is beyond saving 😭
 
 ---
 
-For the `(*)` checkbox.
-test what Innertube returns (`node [FILE_NAME].mjs`)
+For the `(*)` checkbox. Test what Innertube returns: (`node [FILE_NAME].mjs`)
 ```
 const INNERTUBE_API_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
 const INNERTUBE_CLIENT_NAME = "WEB"
@@ -83,7 +82,7 @@ async function main() {
 main().catch(console.error)
 ```
 
-example of `response.json`
+Example of `response.json`:
 ```
 "payload": {
             "commentEntityPayload": {
