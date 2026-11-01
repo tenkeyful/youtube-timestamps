@@ -29,6 +29,14 @@ TODO: this codebase is beyond saving 😭
 
 ---
 
+Videos to test and stress test this add-on to its limit:
+- https://www.youtube.com/watch?v=RbcPK4yAdHU
+- https://www.youtube.com/watch?v=_OgR98kqTJU
+- https://www.youtube.com/watch?v=-FTNbqxCfhA
+- https://www.youtube.com/watch?v=Z10GH-6IX1M
+
+---
+
 For the `(*)` checkbox. Test what Innertube returns: (`node [FILE_NAME].mjs`)
 ```
 const INNERTUBE_API_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
