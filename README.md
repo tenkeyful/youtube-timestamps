@@ -9,7 +9,7 @@ TODO: this codebase is beyond saving 😭
 - [x] Fix 1 of n comment (comments that share a timestamp) UI clipping at the bottom (not perfect but will fix it again).
 - [x] Fix add-on not appearing unless user manually refresh YouTube tab once (fuck YouTube SPA).
 - [x] Make comment overlay change size when video is in normal/full screen.
-- [ ] Show other data like display name, likes, replies, etc... and options to show/hide them the options menu. Maybe? ([return-yt-comment-usernames](https://github.com/Frank0945/return-yt-comment-usernames/blob/main/src/injected.ts), view code below)
+- [x] `(*)` Show other data like display name, likes, replies, etc... and options to show/hide them the options menu. Maybe? ([return-yt-comment-usernames](https://github.com/Frank0945/return-yt-comment-usernames/blob/main/src/injected.ts), view code below)
 - [ ] Remove "Pull up for precise thinking". Maybe.
 - [ ] Current method of showing comments is [Discord-esque](https://www.reddit.com/r/discordapp/comments/1j746ke/new_overlay_notification_please_tell_me_how_to/). Maybe add a new option to change it to [Soundcloud-esque](https://assemblethenoise.wordpress.com/2014/06/21/a-soundcloud-comments-experiment/)? (but it would mean i have to somehow make the seek/progress bar visible!)
 - [x] Fix preview and comment overlays with formatted text (bold, italic, strikethrough) rendering as normal text.
@@ -27,6 +27,7 @@ TODO: this codebase is beyond saving 😭
 
 ---
 
+For the `(*)` checkbox.
 test what Innertube returns (`node [FILE_NAME].mjs`)
 ```
 const INNERTUBE_API_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8"
