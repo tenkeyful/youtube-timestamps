@@ -18,7 +18,7 @@ TODO: this codebase is beyond saving 😭
 - [x] Add support for replies and option to exclude them.
 - [x] Remove support for embedded videos (`/embed`).
 - [ ] Give users the ability to choose between Innertube and YouTube Data API. Innertube is "plug-and-play" but can only fetch the first `maxResults` comments and replies, while YouTube Data API requires users to input their key through Google Cloud Console but fetches all comments of a video.
-- [ ] Checks the fist `maxResults` comments for timestamps... what if it checks for all comments and only get the first `maxResults` of those comments?
+- [ ] Checks the first `maxResults` comments for timestamps... what if it checks for all comments and only get the first `maxResults` of those comments?
 > Material/Reference: [Youtube Timeline](https://chromewebstore.google.com/detail/jjhifobmdjhlphmilfmemefedpkmhdnb), [TimeComments](https://chromewebstore.google.com/detail/djcmgmddnajefejhjhfhlfljoofplmlo), [CommenTime](https://addons.mozilla.org/addon/commentime)
 - [ ] Refactor codebase to make development easier (and migrate some of the consts at the top in `content.js` to `content.css`; it's a hot mess 😵‍💫).
 - [ ] Make some UI adjustments in `content.css` and `options.html`.
