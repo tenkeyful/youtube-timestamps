@@ -6,7 +6,7 @@ hotfix: replace the hide comments part in options.html with ignore coments, so t
 - [x] Add options to change comment overlay position from top left to other directions.
 - [x] Add options to change comment overlay size.
 - [ ] Option to turn on/off comment overlay's width changes in uniform with other comment overlays.
-- [ ] Fix the problem when a comment overlay disappears, the other comment overlays after it suddenly goes up, no animation. Only the when appearing does it have animation. I tried, it's impossible because of the nature of arrays in JavaScript?...
+- [ ] When a comment overlay disappears, the other comment overlays suddenly go up, no animation. Only the when appearing does any comment overlay have animation. I tried, it's impossible because of the nature of arrays in JavaScript?...
 - [x] When in full screen and scrolling through a timestamp, add-on should still scroll that timestamp instead of YouTube's More videos.
 - [x] Fix 1 of n comment (comments that share a timestamp) UI clipping at the bottom (not perfect but will fix it again).
 - [x] Fix add-on not appearing unless user manually refresh YouTube tab once (fuck YouTube SPA).
