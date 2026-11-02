@@ -64,7 +64,8 @@
     }
 
     input[type="number"],
-    input[type="range"] {
+    input[type="range"],
+    select {
       width: 100%;
       height: 44px;
       padding: 0 12px;
@@ -83,9 +84,38 @@
       margin: 0;
     }
 
-    input[type="number"]:focus {
+    input[type="number"]:focus,
+    select:focus {
       border-color: Highlight;
       box-shadow: 0 0 0 6px color-mix(in srgb, Highlight 10%, rgba(0, 0, 0, 0));
+    }
+
+    .checks {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    label.check {
+      display: flex;
+      justify-content: flex-start;
+      gap: 10px;
+      margin: 0;
+      font-weight: 400;
+      cursor: pointer;
+    }
+
+    input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+      accent-color: Highlight;
+    }
+
+    .hint {
+      margin: 8px 0 0;
+      font-size: 0.82rem;
+      color: var(--muted);
     }
 
     #overlayOpacityValue {
@@ -105,7 +135,8 @@
       }
 
       input[type="number"],
-      input[type="range"] {
+      input[type="range"],
+      select {
         background: #1c1b22;
         border: 1px solid #444;
         color: var(--fg);
@@ -120,6 +151,38 @@
       <label for="maxResults">Max Comments & Replies</label>
       <div class="input-wrapper">
         <input type="number" id="maxResults" name="maxResults" min="1" placeholder="e.g. 100" />
+      </div>
+    </div>
+
+    <div class="card">
+      <label for="authorNameMode">Author Name</label>
+      <div class="input-wrapper">
+        <select id="authorNameMode" name="authorNameMode">
+          <option value="">@handle (default)</option>
+          <option value="display">Display name</option>
+          <option value="both">Display name + @handle</option>
+        </select>
+      </div>
+      <p class="hint">Display names need one extra request per author.</p>
+    </div>
+
+    <div class="card">
+      <label>Show With Each Comment</label>
+      <div class="checks">
+        <label class="check"><input type="checkbox" id="showLikes" /> Likes</label>
+        <label class="check"><input type="checkbox" id="showReplies" /> Replies</label>
+        <label class="check"><input type="checkbox" id="showPublished" /> Posted time</label>
+        <label class="check"><input type="checkbox" id="showBadges" /> Badges (verified, artist, channel owner, member)</label>
+      </div>
+    </div>
+
+    <div class="card">
+      <label for="excludeReplies">Replies</label>
+      <div class="input-wrapper">
+        <select id="excludeReplies" name="excludeReplies">
+          <option value="">Include replies (default)</option>
+          <option value="exclude">Exclude replies</option>
+        </select>
       </div>
     </div>
 
@@ -147,6 +210,79 @@
       <div class="input-wrapper">
         <input type="range" id="overlayOpacity" name="overlayOpacity" min="0.1" max="1" step="0.1" />
       </div>
+    </div>
+
+    <div class="card">
+      <label for="overlayPosition">Comment Position</label>
+      <div class="input-wrapper">
+        <select id="overlayPosition" name="overlayPosition">
+          <optgroup label="Top">
+            <option value="">Top left (default)</option>
+            <option value="top-center">Top center</option>
+            <option value="top-right">Top right</option>
+          </optgroup>
+          <optgroup label="Bottom">
+            <option value="bottom-left">Bottom left</option>
+            <option value="bottom-center">Bottom center</option>
+            <option value="bottom-right">Bottom right</option>
+          </optgroup>
+        </select>
+      </div>
+    </div>
+
+    <div class="card">
+      <label for="overlayAnimationAxis">Overlay Animation</label>
+      <div class="input-wrapper">
+        <select id="overlayAnimationAxis" name="overlayAnimationAxis">
+          <option value="">Slide up / down (default)</option>
+          <option value="horizontal">Slide left / right</option>
+        </select>
+      </div>
+      <p class="hint">Comments slide in from, and back out to, the screen edge they are stacked against.</p>
+    </div>
+
+    <div class="card">
+      <label for="overlayWidthMode">Overlay Widths</label>
+      <div class="input-wrapper">
+        <select id="overlayWidthMode" name="overlayWidthMode">
+          <option value="">Same width for all (default)</option>
+          <option value="fit">Each fits its own comment</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card">
+      <label for="overlaySize">Comment Size (%)</label>
+      <div class="input-wrapper">
+        <input type="number" id="overlaySize" name="overlaySize" min="50" max="200" step="1"
+          placeholder="100 (50–200)" />
+      </div>
+    </div>
+
+    <div class="card">
+      <label for="fullscreenOverlaySize">Full Screen Comment Size (%)</label>
+      <div class="input-wrapper">
+        <input type="number" id="fullscreenOverlaySize" name="fullscreenOverlaySize" min="50" max="400" step="1"
+          placeholder="auto (50–400)" />
+      </div>
+    </div>
+
+    <div class="card">
+      <label for="hideStampsMinTimestamps">Exclude Comments With N+ Timestamps From Progress Bar</label>
+      <div class="input-wrapper">
+        <input type="number" id="hideStampsMinTimestamps" name="hideStampsMinTimestamps" min="2"
+          placeholder="off (e.g. 5)" />
+      </div>
+      <p class="hint">Excluded comments are skipped completely: no lookups, nothing sent to the page.</p>
+    </div>
+
+    <div class="card">
+      <label for="hideOverlaysMinTimestamps">Exclude Comments With N+ Timestamps From Overlays</label>
+      <div class="input-wrapper">
+        <input type="number" id="hideOverlaysMinTimestamps" name="hideOverlaysMinTimestamps" min="2"
+          placeholder="off (e.g. 5)" />
+      </div>
+      <p class="hint">Excluded comments are skipped completely: no lookups, nothing sent to the page.</p>
     </div>
 
     <div style="grid-column: span 2; text-align: center; font-size: 0.9rem; color: var(--muted); padding: 10px 8px;">

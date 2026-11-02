@@ -1,13 +1,12 @@
-.ytp-timed-markers-container {
-	z-index: 200;
-}
-
+/* Tick layer: lives next to YouTube's progress bar and is sized to it by the script */
 .__youtube-timestamps__bar {
-	width: 100%;
-	height: 100%;
 	position: absolute;
-	transform: scaleX(1);
-	z-index: 500;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 5px;
+	pointer-events: none;
+	z-index: 200;
 }
 
 .__youtube-timestamps__stamp {
@@ -16,15 +15,15 @@
 	min-width: 2px;
 	max-width: 4px;
 	width: 0.4%;
-	position: fixed;
+	position: absolute;
+	top: 0;
 	border-radius: 1px;
-	z-index: 501;
 	transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 	box-shadow: 0 0 0 rgba(255, 255, 255, 0.2);
-	cursor: pointer;
+	pointer-events: none;
 }
 
-.__youtube-timestamps__stamp:hover {
+.__youtube-timestamps__stamp.__youtube-timestamps__stamp--hover {
 	transform: scaleY(1.3) scaleX(1.2);
 	box-shadow: 0 0 4px rgba(255, 255, 255, 0.4);
 	background: rgba(255, 255, 255, 0.7);
@@ -38,15 +37,18 @@
 	box-shadow: 0 0 3px rgba(255, 255, 255, 0.4);
 }
 
-.__youtube-timestamps__stamp--multiple:hover {
+.__youtube-timestamps__stamp--multiple.__youtube-timestamps__stamp--hover {
 	transform: scaleY(1.4) scaleX(1.3);
 	box-shadow: 0 0 6px rgba(255, 255, 255, 0.9);
 	background: rgba(255, 255, 255, 0.8);
 }
 
-.__youtube-timestamps__preview-wrapper {
-	position: relative;
-	left: 50%;
+.__youtube-timestamps__preview-host {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	z-index: 2000;
+	overflow: visible;
 }
 
 .__youtube-timestamps__preview {
@@ -56,6 +58,8 @@
 	bottom: 0;
 	box-sizing: border-box;
 	padding: 16px;
+	display: flex;
+	flex-direction: column;
 	opacity: 0;
 	animation: fadeInUp 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 	z-index: 9999;
@@ -70,8 +74,16 @@
 
 .__youtube-timestamps__preview__author {
 	display: flex;
-	align-items: center;
+	align-items: center;   /* the avatar centres against the whole name + stats column */
+	flex: none;
 	margin-bottom: 12px;
+}
+
+.__youtube-timestamps__preview__who {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	margin-left: 10px;
 }
 
 .__youtube-timestamps__preview__avatar {
@@ -85,11 +97,81 @@
 	font-size: 13px;
 	font-weight: 600;
 	line-height: 1.4;
-	margin-left: 10px;
 	letter-spacing: 0.2px;
 }
 
+.__youtube-timestamps__preview__meta {
+	font-size: 11px;
+	line-height: 1.3;
+	margin: 1px 0 0;
+	opacity: 0.7;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.__youtube-timestamps__live-overlay__meta {
+	font-size: 11px;
+	line-height: 1.2;
+	margin-top: -3px;
+	opacity: 0.7;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* the @handle next to a display name, and the verified / channel owner badges */
+.__youtube-timestamps__handle {
+	font-weight: 400;
+	opacity: 0.65;
+}
+
+.__youtube-timestamps__badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	vertical-align: middle;
+	margin-left: 5px;
+	font-weight: 600;
+	line-height: 1;
+}
+
+/* verified / artist: a disc in the username's colour with the icon in the card's background colour */
+.__youtube-timestamps__badge--verified,
+.__youtube-timestamps__badge--artist {
+	width: 13px;
+	height: 13px;
+	border-radius: 50%;
+	font-size: 9px;
+	background: currentColor;
+}
+
+.__youtube-timestamps__badge--verified::after,
+.__youtube-timestamps__badge--artist::after {
+	content: attr(data-glyph);
+	color: var(--yt-sys-color-baseline--base-background);
+}
+
+.__youtube-timestamps__badge-member {
+	height: 16px;
+	width: auto;
+	margin-left: 5px;
+	vertical-align: middle;
+	object-fit: contain;
+	pointer-events: none;
+}
+
+.__youtube-timestamps__badge--creator {
+	padding: 2px 6px;
+	border-radius: 8px;
+	font-size: 10px;
+	background: rgba(128, 128, 128, 0.6);
+	color: #fff;
+}
+
 .__youtube-timestamps__preview__text {
+	flex: 1 1 auto;        /* takes whatever height is left and scrolls */
+	min-height: 24px;
 	margin-bottom: 12px;
 	font-size: 13px;
 	font-weight: 400;
@@ -99,6 +181,32 @@
 	word-wrap: break-word;
 	overflow-y: auto;
 	scroll-behavior: smooth;
+}
+
+.__youtube-timestamps__emoji {
+	display: inline-block;
+	height: 1.3em;
+	width: auto;
+	margin: 0 1px;
+	vertical-align: -0.3em;
+	object-fit: contain;
+	pointer-events: none;
+}
+
+.__youtube-timestamps__fmt-bold {
+	font-weight: 700;
+}
+
+.__youtube-timestamps__fmt-italic {
+	font-style: italic;
+}
+
+.__youtube-timestamps__fmt-strike {
+	text-decoration: line-through;
+}
+
+.__youtube-timestamps__preview__text-link {
+	color: var(--yt-sys-color-baseline--call-to-action);
 }
 
 .__youtube-timestamps__preview__text-stamp {
@@ -135,6 +243,7 @@
 	margin-left: auto;
 	margin-right: auto;
 	box-sizing: border-box;
+	flex: none;            /* never shrinks, so it can never be pushed out of the card */
 }
 
 .__youtube-timestamps__overlay-container {
@@ -151,9 +260,57 @@
 	gap: 12px;
 }
 
+/* OVERLAY POSITION (set via data-position on the container) */
+.__youtube-timestamps__overlay-container[data-position^="bottom"] {
+	top: auto;
+	bottom: var(--yt-overlay-bottom, 70px); /* clear the video controls (taller in full screen) */
+}
+
+/* Overlays are wrapped in a slot (not zoomed) so they can be measured and animated in plain pixels */
+.__youtube-timestamps__overlay-slot {
+	display: block;
+}
+
+.__youtube-timestamps__overlay-container[data-position$="right"] {
+	left: auto;
+	right: 6px;
+}
+
+.__youtube-timestamps__overlay-container[data-position$="right"] .__youtube-timestamps__live-overlay {
+	left: auto;
+	right: 12px;
+}
+
+.__youtube-timestamps__overlay-container[data-position$="center"] {
+	left: 0;
+	right: 0;
+	width: fit-content;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+/* Widths. Default ("uniform"): flex items stretch, so every overlay is as wide as the widest one.
+   "fit": each overlay is only as wide as its own text, aligned to the side the stack is on. */
+.__youtube-timestamps__overlay-container[data-width="fit"] {
+	align-items: flex-start;
+}
+
+.__youtube-timestamps__overlay-container[data-width="fit"][data-position$="right"] {
+	align-items: flex-end;
+}
+
+.__youtube-timestamps__overlay-container[data-width="fit"][data-position$="center"] {
+	align-items: center;
+}
+
+.__youtube-timestamps__overlay-container[data-position$="center"] .__youtube-timestamps__live-overlay {
+	left: 0;
+}
+
 .__youtube-timestamps__live-overlay {
 	position: relative;
 	left: 12px;
+	zoom: var(--yt-overlay-scale, 1);
 	display: flex;
 	align-items: flex-start;
 	gap: 12px;
@@ -163,7 +320,7 @@
 	min-width: 220px;
 	backdrop-filter: blur(8px);
 	opacity: 0;
-	transform: translateY(-20px);
+	transform: var(--yt-overlay-enter, translateY(-20px));
 	transition:
 		transform 0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94),
 		opacity 0.32s ease;
@@ -252,6 +409,11 @@
 	cursor: pointer;
 }
 
+.__youtube-timestamps__live-overlay__text-link {
+	color: var(--yt-sys-color-baseline--call-to-action);
+	cursor: pointer;
+}
+
 .__youtube-timestamps__live-overlay__text-stamp:hover {
 	background: rgb(
 		from var(--yt-sys-color-baseline--call-to-action) r g b / 0.2
@@ -289,7 +451,8 @@
 			0 2px 8px rgba(0, 0, 0, 0.1);
 	}
 
-	.__youtube-timestamps__preview__name {
+	.__youtube-timestamps__preview__name,
+	.__youtube-timestamps__preview__meta {
 		color: #0f0f0f;
 	}
 
@@ -305,7 +468,8 @@
 			0 4px 12px rgba(0, 0, 0, 0.1);
 	}
 
-	.__youtube-timestamps__live-overlay__author {
+	.__youtube-timestamps__live-overlay__author,
+	.__youtube-timestamps__live-overlay__meta {
 		color: #0f0f0f;
 	}
 
@@ -327,7 +491,10 @@ html[dark] .__youtube-timestamps__preview {
 
 .dark .__youtube-timestamps__preview__name,
 [dark] .__youtube-timestamps__preview__name,
-html[dark] .__youtube-timestamps__preview__name {
+html[dark] .__youtube-timestamps__preview__name,
+.dark .__youtube-timestamps__preview__meta,
+[dark] .__youtube-timestamps__preview__meta,
+html[dark] .__youtube-timestamps__preview__meta {
 	color: #ffffff;
 }
 
@@ -349,7 +516,10 @@ html[dark] .__youtube-timestamps__live-overlay {
 
 .dark .__youtube-timestamps__live-overlay__author,
 [dark] .__youtube-timestamps__live-overlay__author,
-html[dark] .__youtube-timestamps__live-overlay__author {
+html[dark] .__youtube-timestamps__live-overlay__author,
+.dark .__youtube-timestamps__live-overlay__meta,
+[dark] .__youtube-timestamps__live-overlay__meta,
+html[dark] .__youtube-timestamps__live-overlay__meta {
 	color: #ffffff;
 }
 
