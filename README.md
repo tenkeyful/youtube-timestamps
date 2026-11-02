@@ -3,7 +3,7 @@ TODO: this codebase is beyond saving 😭
 - [x] Only current timestamp glows when a comment overlay has multiple timestamps.
 - [x] Make comment overlays that are long scroll to display more text, similar to preview.
 - [x] Add options to change comment overlay position from top left to other directions.
-- [ ] Add options to change the direction the comment overlay is appearing and disappearing.
+- [x] Add options to change the direction the comment overlay is appearing and disappearing.
 - [x] Add options to change comment overlay size.
 - [x] Option to turn on/off comment overlay's width changes in uniform with other comment overlays.
 - [x] When a comment overlay disappears, the other comment overlays suddenly go up, no animation. Only the when appearing does any comment overlay have animation.
