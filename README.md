@@ -4,13 +4,12 @@ TODO: this codebase is beyond saving 😭
 - [x] Make comment overlays that are long scroll to display more text, similar to preview.
 - [x] Add options to change comment overlay position from top left to other directions.
 - [x] Add options to change the direction the comment overlay is appearing and disappearing.
-- [x] Add options to change comment overlay size.
+- [x] Add options to change comment overlay size in normal/full screen.
 - [x] Option to turn on/off comment overlay's width changes in uniform with other comment overlays.
 - [x] When a comment overlay disappears, the other comment overlays suddenly go up, no animation. Only the when appearing does any comment overlay have animation.
 - [x] When in full screen and scrolling through a timestamp, add-on should still scroll that timestamp instead of YouTube's More videos.
 - [x] Fix 1 of n comment (comments that share a timestamp) UI clipping at the bottom (not perfect but will fix it again).
 - [x] Fix add-on not appearing unless user manually refresh YouTube tab once (fuck YouTube SPA).
-- [x] Make comment overlay change size when video is in normal/full screen.
 - [x] `(*)` Show other data like display name, likes, replies, etc... and options to show/hide them the options menu. Maybe? ([return-yt-comment-usernames](https://github.com/Frank0945/return-yt-comment-usernames/blob/main/src/injected.ts), view code below)
 - [x] Add `<optgroup>` for selection boxes!
 - [ ] Change timestamp bar to a circle to mimic YouTube's (on mobile, on videos that have Timed comments).
