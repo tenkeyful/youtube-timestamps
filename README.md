@@ -12,7 +12,7 @@ TODO: this codebase is beyond saving 😭
 - [x] Fix add-on not appearing unless user manually refresh YouTube tab once (fuck YouTube SPA).
 - [x] Make comment overlay change size when video is in normal/full screen.
 - [x] `(*)` Show other data like display name, likes, replies, etc... and options to show/hide them the options menu. Maybe? ([return-yt-comment-usernames](https://github.com/Frank0945/return-yt-comment-usernames/blob/main/src/injected.ts), view code below)
-- [ ] Add `<optgroup>` for selection boxes!
+- [x] Add `<optgroup>` for selection boxes!
 - [ ] Remove "Pull up for precise thinking". Maybe.
 - [ ] Current method of showing comments is [Discord-esque](https://www.reddit.com/r/discordapp/comments/1j746ke/new_overlay_notification_please_tell_me_how_to/). Maybe add a new option to change it to [Soundcloud-esque](https://assemblethenoise.wordpress.com/2014/06/21/a-soundcloud-comments-experiment/)? (but it would mean i have to somehow make the seek/progress bar visible!)
 - [x] Fix preview and comment overlays with formatted text (bold, italic, strikethrough) rendering as normal text.
