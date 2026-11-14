@@ -22,11 +22,9 @@ TODO: this codebase is beyond saving 😭
 - [x] Remove support for embedded videos (`/embed`).
 - [x] Give users the ability to choose between Innertube and YouTube Data API. Innertube is "plug-and-play" but can only fetch the first `maxResults` comments and replies, while YouTube Data API requires users to input their key through Google Cloud Console but fetches all comments of a video.
 - [x] Checks the first `maxResults` comments for timestamps... what if it checks for all comments and only get the first `maxResults` of those comments?
-> Material/Reference: [Youtube Timeline](https://chromewebstore.google.com/detail/jjhifobmdjhlphmilfmemefedpkmhdnb), [TimeComments](https://chromewebstore.google.com/detail/djcmgmddnajefejhjhfhlfljoofplmlo), [CommenTime](https://addons.mozilla.org/addon/commentime)
+> Material/Reference: [Youtube Timeline](https://chromewebstore.google.com/detail/jjhifobmdjhlphmilfmemefedpkmhdnb), [TimeComments](https://chromewebstore.google.com/detail/djcmgmddnajefejhjhfhlfljoofplmlo), [CommenTime](https://addons.mozilla.org/addon/commentime), [Highlights for YouTube](https://chromewebstore.google.com/detail/highlights-for-youtube/jahmafmcpgdedfjfknmfkhaiejlfdcfc), [Scrubber: YouTube Comment Timestamps](https://chromewebstore.google.com/detail/scrubber-youtube-comment/jhhcdmdpkdlkdpklaogdbknnciapcfah)
 - [ ] Refactor codebase to make development easier (and migrate some of the consts at the top in `content.js` to `content.css`; it's a hot mess 😵‍💫).
 - [ ] Make some UI adjustments in `content.css` and `options.html`.
-
-> Others: [Highlights for YouTube](https://chromewebstore.google.com/detail/highlights-for-youtube/jahmafmcpgdedfjfknmfkhaiejlfdcfc), [Scrubber: YouTube Comment Timestamps](https://chromewebstore.google.com/detail/scrubber-youtube-comment/jhhcdmdpkdlkdpklaogdbknnciapcfah)
 
 ---
 
