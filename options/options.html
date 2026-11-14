@@ -4,78 +4,142 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Options</title>
+  <meta name="color-scheme" content="light dark" />
+  <title>YouTube Timestamps: Options</title>
   <style>
     :root {
       --bg: #ffffff;
       --fg: #15141a;
-      --muted: #666;
-      --card-bg: #f7f7f9;
-      --card-border: rgba(0, 0, 0, 0.08);
-      --radius: 12px;
-      --gap-sm: 8px;
-      --gap-md: 16px;
-      --container-w: 700px;
-      --shadow: 0 6px 18px rgba(15, 15, 20, 0.05);
+      --muted: #5b5b66;
+      --panel-bg: #f7f7f9;
+      --border: rgba(0, 0, 0, 0.1);
+      --field-bg: #ffffff;
+      --field-border: rgba(0, 0, 0, 0.25);
+      --note-bg: #eef3fb;
+      --radius: 10px;
+      --control-w: 250px;
+      --accent: Highlight;
     }
 
-    html,
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1c1b22;
+        --fg: #fbfbfe;
+        --muted: #b1b1bd;
+        --panel-bg: #2a2933;
+        --border: rgba(255, 255, 255, 0.14);
+        --field-bg: #1c1b22;
+        --field-border: rgba(255, 255, 255, 0.3);
+        --note-bg: #22283a;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
-      padding: 20px;
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      padding: 0 20px 40px;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.45;
       background: var(--bg);
       color: var(--fg);
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
-      display: flex;
-      align-items: flex-start;
-      justify-content: center;
     }
 
-    .container {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: var(--gap-md);
-      width: 100%;
-      max-width: var(--container-w);
+    .page {
+      max-width: 720px;
+      margin: 0 auto;
     }
 
-    .card {
-      background: var(--card-bg);
+    /* ---------- header and section links ---------- */
+    header {
+      padding: 22px 0 8px;
+    }
+
+    h1 {
+      margin: 0 0 4px;
+      font-size: 1.5rem;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    header p {
+      margin: 0;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    /* ---------- sections and rows ---------- */
+    section {
+      margin-top: 26px;
+    }
+
+    h2 {
+      margin: 0 0 2px;
+      font-size: 1.15rem;
+      font-weight: 700;
+    }
+
+    .section-intro {
+      margin: 0 0 10px;
+      color: var(--muted);
+    }
+
+    .panel {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: var(--gap-md);
-      border: 1px solid var(--card-border);
-      box-shadow: var(--shadow);
+      overflow: hidden;
     }
 
-    label {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+    .row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) var(--control-w);
+      gap: 8px 20px;
+      align-items: start;
+      padding: 14px 16px;
+    }
+
+    .row+.row {
+      border-top: 1px solid var(--border);
+    }
+
+    .row-title,
+    .row label.title {
+      display: block;
       font-size: 0.98rem;
       font-weight: 600;
-      margin-bottom: 10px;
-      color: var(--fg);
     }
 
-    .input-wrapper {
-      position: relative;
+    .hint {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 0.86rem;
     }
 
+    .row-control {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    /* ---------- controls ---------- */
     input[type="number"],
-    input[type="range"],
+    input[type="password"],
     select {
       width: 100%;
-      height: 44px;
-      padding: 0 12px;
-      font-size: 1rem;
-      border-radius: 10px;
-      border: 1px solid rgba(0, 0, 0, 0.12);
-      background: #fff;
+      height: 38px;
+      padding: 0 10px;
+      font: inherit;
       color: var(--fg);
-      outline: none;
-      box-sizing: border-box;
+      background: var(--field-bg);
+      border: 1px solid var(--field-border);
+      border-radius: 8px;
     }
 
     input[type="number"]::-webkit-outer-spin-button,
@@ -84,210 +148,435 @@
       margin: 0;
     }
 
-    input[type="number"]:focus,
-    select:focus {
-      border-color: Highlight;
-      box-shadow: 0 0 0 6px color-mix(in srgb, Highlight 10%, rgba(0, 0, 0, 0));
+    input[type="number"]:disabled {
+      opacity: 0.5;
     }
 
-    .checks {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
     }
 
-    label.check {
+    input:focus-visible,
+    select:focus-visible,
+    button:focus-visible,
+    summary:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .check {
       display: flex;
-      justify-content: flex-start;
-      gap: 10px;
-      margin: 0;
+      align-items: flex-start;
+      gap: 8px;
       font-weight: 400;
       cursor: pointer;
     }
 
-    input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      margin: 0;
-      accent-color: Highlight;
+    .check input {
+      flex: none;
+      width: 17px;
+      height: 17px;
+      margin: 1px 0 0;
+      accent-color: var(--accent);
     }
 
-    .hint {
-      margin: 8px 0 0;
-      font-size: 0.82rem;
-      color: var(--muted);
+    .check-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    button {
+      width: 100%;
+      height: 38px;
+      padding: 0 14px;
+      font: inherit;
+      font-weight: 600;
+      color: var(--fg);
+      background: var(--field-bg);
+      border: 1px solid var(--field-border);
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      border-color: var(--accent);
     }
 
     #overlayOpacityValue {
-      font-weight: normal;
+      margin-left: 6px;
+      font-weight: 400;
       color: var(--muted);
-      margin-left: 8px;
     }
 
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #1c1b22;
-        --fg: #fbfbfe;
-        --muted: #bbb;
-        --card-bg: #2a2933;
-        --card-border: #444;
-        --shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
-      }
+    /* ---------- "More" explanations, folded away until asked for ---------- */
+    details.more {
+      margin-top: 6px;
+      font-size: 0.86rem;
+    }
 
-      input[type="number"],
-      input[type="range"],
-      select {
-        background: #1c1b22;
-        border: 1px solid #444;
-        color: var(--fg);
+    details.more summary {
+      display: inline-block;
+      color: var(--muted);
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    details.more p {
+      margin: 6px 0 0;
+      padding-left: 10px;
+      border-left: 3px solid var(--border);
+      color: var(--muted);
+    }
+
+    /* ---------- status boxes ---------- */
+    .status {
+      margin: 0;
+      padding: 12px 16px;
+      background: var(--note-bg);
+      color: var(--fg);
+      font-size: 0.86rem;
+    }
+
+    .status strong {
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .status span:empty::before {
+      content: "No scan yet. Open a YouTube video, then refresh this page.";
+      color: var(--muted);
+    }
+
+    footer {
+      margin-top: 28px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.86rem;
+    }
+
+    footer a {
+      color: inherit;
+    }
+
+    /* narrow windows (the add-ons page can be small): controls go under their labels */
+    @media (max-width: 560px) {
+      .row {
+        grid-template-columns: minmax(0, 1fr);
       }
     }
   </style>
 </head>
 
 <body>
-  <div class="container">
-    <div class="card">
-      <label for="maxResults">Max Comments & Replies</label>
-      <div class="input-wrapper">
-        <input type="number" id="maxResults" name="maxResults" min="1" placeholder="e.g. 100" />
-      </div>
-    </div>
+  <div class="page">
+    <header>
+      <h1>YouTube Timestamps</h1>
+      <p>Settings are saved as you change them. Refresh your YouTube tab to see the effect.</p>
+    </header>
 
-    <div class="card">
-      <label for="authorNameMode">Author Name</label>
-      <div class="input-wrapper">
-        <select id="authorNameMode" name="authorNameMode">
-          <option value="">@handle (default)</option>
-          <option value="display">Display name</option>
-          <option value="both">Display name + @handle</option>
-        </select>
-      </div>
-    </div>
+    <!-- ===================================================== COMMENTS -->
+    <section id="comments">
+      <h2>Comments</h2>
+      <p class="section-intro">Where comments come from and how many are read. Big videos take a while; dots appear as comments are found.</p>
 
-    <div class="card">
-      <label>Show With Each Comment</label>
-      <div class="checks">
-        <label class="check"><input type="checkbox" id="showLikes" /> Likes</label>
-        <label class="check"><input type="checkbox" id="showReplies" /> Replies</label>
-        <label class="check"><input type="checkbox" id="showPublished" /> Posted time</label>
-        <label class="check"><input type="checkbox" id="showBadges" /> Badges (verified, artist, channel owner, member)</label>
-      </div>
-    </div>
+      <div class="panel">
+        <div class="row">
+          <div>
+            <label class="title" for="fetchBackend">Comment source</label>
+            <p class="hint">The Data API is steadier, but it spends quota on your own key.</p>
+          </div>
+          <div class="row-control">
+            <select id="fetchBackend" name="fetchBackend">
+              <option value="">Innertube (default)</option>
+              <option value="dataApi">Data API</option>
+            </select>
+          </div>
+        </div>
 
-    <div class="card">
-      <label for="excludeReplies">Replies</label>
-      <div class="input-wrapper">
-        <select id="excludeReplies" name="excludeReplies">
-          <option value="">Include replies (default)</option>
-          <option value="exclude">Exclude replies</option>
-        </select>
-      </div>
-    </div>
+        <div class="row data-api-only" id="dataApiKeyCard">
+          <div>
+            <label class="title" for="dataApiKey">Data API key</label>
+            <p class="hint">Kept on this device only. It is never synced.</p>
+            <details class="more">
+              <summary>How to get a key</summary>
+              <p>Create one in <a href="https://console.cloud.google.com">Google Cloud Console</a> and enable "YouTube Data API v3". Restrict the key to that API, and leave "Application restrictions" on None, because this add-on's requests carry no website referrer. Watch <a href="https://www.youtube.com/watch?v=EPeDTRNKAVo">this YouTube video</a> for step-by-step guide.</p>
+            </details>
+          </div>
+          <div class="row-control">
+            <input type="password" id="dataApiKey" name="dataApiKey" autocomplete="off" spellcheck="false" placeholder="AIza…" />
+          </div>
+        </div>
 
-    <div class="card">
-      <label for="maxConcurrentOverlays">Max Concurrent Comments</label>
-      <div class="input-wrapper">
-        <input type="number" id="maxConcurrentOverlays" name="maxConcurrentOverlays" min="1"
-          placeholder="e.g. 3" />
-      </div>
-    </div>
+        <div class="row">
+          <div>
+            <label class="title" for="maxResults">Max comments (and/or replies) to scan</label>
+            <p class="hint">Recommended: 1000 to 5000.</p>
+            <details class="more">
+              <summary>More</summary>
+              <p>The higher, the more quota your API (Innertube or Data API) will be used, but it will be more accurate as it will fetch more comments (and/or replies).</p>
+            </details>
+          </div>
+          <div class="row-control">
+            <input type="number" id="maxResults" name="maxResults" min="1" placeholder="500 (default)" />
+            <label class="check"><input type="checkbox" id="unlimitedScan" /> No limit: scan to the end</label>
+          </div>
+        </div>
 
-    <div class="card">
-      <label for="overlayDuration">Comment Duration (s)</label>
-      <div class="input-wrapper">
-        <input type="number" id="overlayDuration" name="overlayDuration" min="1" step="1"
-          placeholder="e.g. 4" />
-      </div>
-    </div>
+        <div class="row">
+          <div>
+            <label class="title" for="commentSort">Comment order</label>
+            <p class="hint">Which comments are scanned first. It only matters when the scan stops before the end.</p>
+          </div>
+          <div class="row-control">
+            <select id="commentSort" name="commentSort">
+              <option value="">Top comments (default)</option>
+              <option value="newest">Newest first</option>
+              <option value="both">Both: half Top, half Newest</option>
+            </select>
+          </div>
+        </div>
 
-    <div class="card">
-      <label for="overlayOpacity">
-        Comment Opacity
-        <span id="overlayOpacityValue">unset</span>
-      </label>
-      <div class="input-wrapper">
-        <input type="range" id="overlayOpacity" name="overlayOpacity" min="0.1" max="1" step="0.1" />
-      </div>
-    </div>
+        <div class="row">
+          <div>
+            <label class="title" for="excludeReplies">Replies</label>
+            <p class="hint">Replies cost extra requests for every thread that has them.</p>
+          </div>
+          <div class="row-control">
+            <select id="excludeReplies" name="excludeReplies">
+              <option value="">Include replies (default)</option>
+              <option value="exclude">Exclude replies</option>
+            </select>
+          </div>
+        </div>
 
-    <div class="card">
-      <label for="overlayPosition">Comment Position</label>
-      <div class="input-wrapper">
-        <select id="overlayPosition" name="overlayPosition">
-          <optgroup label="Top">
-            <option value="">Top left (default)</option>
-            <option value="top-center">Top center</option>
-            <option value="top-right">Top right</option>
-          </optgroup>
-          <optgroup label="Bottom">
-            <option value="bottom-left">Bottom left</option>
-            <option value="bottom-center">Bottom center</option>
-            <option value="bottom-right">Bottom right</option>
-          </optgroup>
-        </select>
-      </div>
-    </div>
+        <div class="row data-api-only">
+          <div>
+            <label class="title" for="quotaBudget">Quota budget per video</label>
+            <p class="hint">Recommended: 1000. Empty means no cap.</p>
+            <details class="more">
+              <summary>More</summary>
+              <p>Every request costs 1 unit and the default allowance is 10,000 a day for the whole key. When the budget runs out the scan stops and keeps what it found. 1000 units read about 50,000 comments.</p>
+            </details>
+          </div>
+          <div class="row-control">
+            <input type="number" id="quotaBudget" name="quotaBudget" min="10" step="1" placeholder="no cap" />
+          </div>
+        </div>
 
-    <div class="card">
-      <label for="overlayAnimationAxis">Overlay Animation (WIP)</label>
-      <div class="input-wrapper">
-        <select id="overlayAnimationAxis" name="overlayAnimationAxis">
-          <option value="">Slide up / down (default)</option>
-          <option value="horizontal">Slide left / right</option>
-        </select>
-      </div>
-      <p class="hint">Comments slide in from, and back out to, the screen edge they are stacked against.</p>
-    </div>
+        <div class="row data-api-only">
+          <div>
+            <span class="row-title">EXPERIMENTAL, ⚠️ DANGEROUS: timestamp search</span>
+            <p class="hint">Off by default. Finds more timestamp comments per quota unit, but incompletely.</p>
+            <details class="more">
+              <summary>More</summary>
+              <p>Instead of reading comments in order, it asks the Data API for each possible timestamp of the video ("0:07", "0:08", ...) and keeps what comes back. <b>BEWARE, if you check this checkbox and use it on a popular MV with millions of comments, don't say I didn't warn you!!! it will completely lag the hell out of your browser</b></p>
+            </details>
+          </div>
+          <div class="row-control">
+            <label class="check"><input type="checkbox" id="dataApiSearch" /> Search for each timestamp instead of scanning</label>
+          </div>
+        </div>
 
-    <div class="card">
-      <label for="overlayWidthMode">Overlay Widths</label>
-      <div class="input-wrapper">
-        <select id="overlayWidthMode" name="overlayWidthMode">
-          <option value="">Same width for all (default)</option>
-          <option value="fit">Each fits its own comment</option>
-        </select>
-      </div>
-    </div>
+        <div class="row">
+          <div>
+            <label class="title" for="cacheTtl">Saved scans</label>
+            <p class="hint">A finished scan is kept on this device, so reopening the video costs no requests.</p>
+            <details class="more">
+              <summary>More</summary>
+              <p>It also survives restarting Firefox. New comments only show up once the saved scan expires or you clear it. A scan is saved only if it ended normally, and is reused only while the scan limit, order, source and budget are unchanged.</p>
+            </details>
+          </div>
+          <div class="row-control">
+            <select id="cacheTtl" name="cacheTtl">
+              <option value="">Keep for 1 day (default)</option>
+              <option value="off">Do not save</option>
+              <option value="1h">Keep for 1 hour</option>
+              <option value="6h">Keep for 6 hours</option>
+              <option value="1w">Keep for 1 week</option>
+            </select>
+            <button type="button" id="clearCache">Clear saved scans</button>
+            <p class="hint" id="cacheStatus"></p>
+          </div>
+        </div>
 
-    <div class="card">
-      <label for="overlaySize">Comment Size (%)</label>
-      <div class="input-wrapper">
-        <input type="number" id="overlaySize" name="overlaySize" min="50" max="200" step="1"
-          placeholder="100 (50–200)" />
+        <p class="status" aria-live="polite">
+          <strong>Last scan</strong>
+          <span id="fetchStatus"></span>
+        </p>
       </div>
-    </div>
+    </section>
 
-    <div class="card">
-      <label for="fullscreenOverlaySize">Full Screen Comment Size (%)</label>
-      <div class="input-wrapper">
-        <input type="number" id="fullscreenOverlaySize" name="fullscreenOverlaySize" min="50" max="400" step="1"
-          placeholder="auto (50–400)" />
+    <!-- ===================================================== DISPLAY -->
+    <section id="display">
+      <h2>Display</h2>
+      <p class="section-intro">What is shown with each comment.</p>
+
+      <div class="panel">
+        <div class="row">
+          <div>
+            <label class="title" for="authorNameMode">Author name</label>
+            <p class="hint">Display names cost one extra request per author. If commenter only has @handle and no display name, both selection Display name and Display name + @handle will only show @handle.</p>
+          </div>
+          <div class="row-control">
+            <select id="authorNameMode" name="authorNameMode">
+              <option value="">@handle (default)</option>
+              <option value="display">Display name</option>
+              <option value="both">Display name + @handle</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row" role="group" aria-labelledby="showWithTitle">
+          <div>
+            <span class="row-title" id="showWithTitle">Show with each comment</span>
+            <p class="hint">Channel owner works with both sources. Verified, artist and member badges only works if you set comment source as Innertube.</p>
+          </div>
+          <div class="row-control check-list">
+            <label class="check"><input type="checkbox" id="showLikes" /> Likes</label>
+            <label class="check"><input type="checkbox" id="showReplies" /> Replies</label>
+            <label class="check"><input type="checkbox" id="showPublished" /> Posted time</label>
+            <label class="check"><input type="checkbox" id="showBadges" /> Badges</label>
+          </div>
+        </div>
       </div>
-    </div>
+    </section>
 
-    <div class="card">
-      <label for="hideStampsMinTimestamps">Exclude Comments With N+ Timestamps From Progress Bar</label>
-      <div class="input-wrapper">
-        <input type="number" id="hideStampsMinTimestamps" name="hideStampsMinTimestamps" min="2"
-          placeholder="off (e.g. 5)" />
+    <!-- ===================================================== OVERLAYS -->
+    <section id="overlays">
+      <h2>Overlays</h2>
+      <p class="section-intro">The comments that pop up over the video when playback reaches their timestamp.</p>
+
+      <div class="panel">
+        <div class="row">
+          <div>
+            <label class="title" for="maxConcurrentOverlays">Max at once</label>
+            <p class="hint">How many comments can be on screen together.</p>
+          </div>
+          <div class="row-control">
+            <input type="number" id="maxConcurrentOverlays" name="maxConcurrentOverlays" min="1" placeholder="e.g. 3" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label class="title" for="overlayDuration">Duration (seconds)</label>
+            <p class="hint">How long each comment stays.</p>
+          </div>
+          <div class="row-control">
+            <input type="number" id="overlayDuration" name="overlayDuration" min="1" step="1" placeholder="e.g. 4" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label class="title" for="overlayOpacity">Opacity<span id="overlayOpacityValue">unset</span></label>
+          </div>
+          <div class="row-control">
+            <input type="range" id="overlayOpacity" name="overlayOpacity" min="0.1" max="1" step="0.1" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label class="title" for="overlayPosition">Position</label>
+          </div>
+          <div class="row-control">
+            <select id="overlayPosition" name="overlayPosition">
+              <optgroup label="Top">
+                <option value="">Top left (default)</option>
+                <option value="top-center">Top center</option>
+                <option value="top-right">Top right</option>
+              </optgroup>
+              <optgroup label="Bottom">
+                <option value="bottom-left">Bottom left</option>
+                <option value="bottom-center">Bottom center</option>
+                <option value="bottom-right">Bottom right</option>
+              </optgroup>
+            </select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label class="title" for="overlayAnimationAxis">Animation (work in progress)</label>
+            <p class="hint">Comments slide in from, and back out to, the edge they are stacked against. Centered positions always slide up and down.</p>
+          </div>
+          <div class="row-control">
+            <select id="overlayAnimationAxis" name="overlayAnimationAxis">
+              <option value="">Slide up / down (default)</option>
+              <option value="horizontal">Slide left / right</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label class="title" for="overlayWidthMode">Widths</label>
+          </div>
+          <div class="row-control">
+            <select id="overlayWidthMode" name="overlayWidthMode">
+              <option value="">Same width for all (default)</option>
+              <option value="fit">Each fits its own comment</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label class="title" for="overlaySize">Size (%)</label>
+            <p class="hint">50 to 200.</p>
+          </div>
+          <div class="row-control">
+            <input type="number" id="overlaySize" name="overlaySize" min="50" max="200" step="1" placeholder="100" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label class="title" for="fullscreenOverlaySize">Full screen size (%)</label>
+            <p class="hint">50 to 400. Empty scales with the player.</p>
+          </div>
+          <div class="row-control">
+            <input type="number" id="fullscreenOverlaySize" name="fullscreenOverlaySize" min="50" max="400" step="1" placeholder="auto" />
+          </div>
+        </div>
       </div>
-    </div>
+    </section>
 
-    <div class="card">
-      <label for="hideOverlaysMinTimestamps">Exclude Comments With N+ Timestamps From Overlays</label>
-      <div class="input-wrapper">
-        <input type="number" id="hideOverlaysMinTimestamps" name="hideOverlaysMinTimestamps" min="2"
-          placeholder="off (e.g. 5)" />
+    <!-- ===================================================== FILTERS -->
+    <section id="filters">
+      <h2>Filters</h2>
+      <p class="section-intro">Comments with many timestamps are usually chapter lists. Hide them where they get in the way. Empty means off.</p>
+
+      <div class="panel">
+        <div class="row">
+          <div>
+            <label class="title" for="hideStampsMinTimestamps">Progress bar: exclude N+ timestamps</label>
+            <p class="hint">A comment with this many timestamps or more gets no dots.</p>
+          </div>
+          <div class="row-control">
+            <input type="number" id="hideStampsMinTimestamps" name="hideStampsMinTimestamps" min="2" placeholder="off (e.g. 5)" />
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label class="title" for="hideOverlaysMinTimestamps">Overlays: exclude N+ timestamps</label>
+            <p class="hint">A comment with this many timestamps or more never pops up.</p>
+          </div>
+          <div class="row-control">
+            <input type="number" id="hideOverlaysMinTimestamps" name="hideOverlaysMinTimestamps" min="2" placeholder="off (e.g. 5)" />
+          </div>
+        </div>
       </div>
-    </div>
+    </section>
 
-    <div style="grid-column: span 2; text-align: center; font-size: 0.9rem; color: var(--muted); padding: 10px 8px;">
-      Settings are automatically saved. Please refresh YouTube tab to reflect changes. <br>
-      <a href="https://github.com/tenkeyful/youtube-timestamps/blob/master/README.md" target="_blank" rel="noopener noreferrer" style="color: inherit">
-        There's a lot to do</a>
-         and this add-on is rough around the edges, so it might take a while for new updates to roll out.
-    </div>
+    <footer>
+      <a href="https://github.com/tenkeyful/youtube-timestamps/blob/master/README.md" target="_blank" rel="noopener noreferrer">There's a lot to do</a>
+      and this add-on is rough around the edges, so new updates may take a while.
+    </footer>
   </div>
 
   <script src="options.js"></script>

@@ -1,1496 +1,1993 @@
 // CONFIGURATION // cuz this add-on is experimental, subject to future changes
-const PREVIEW_DEFAULT_WIDTH     = 320
-const PREVIEW_MAX_HEIGHT        = 175
-const PREVIEW_MIN_HEIGHT        = 40
+const PREVIEW_DEFAULT_WIDTH = 320;
+const PREVIEW_MAX_HEIGHT = 175;
+const PREVIEW_MIN_HEIGHT = 40;
 // Vertical margins between the header, text and button. They are part of the card's content, so the
 // cap has to include them or the button at the bottom gets pushed out of the card.
-const PREVIEW_MARGINS_TOTAL     = 24
-const PREVIEW_AVATAR_SIZE       = 24   // matches the avatar's CSS width/height
-const PREVIEW_BORDER_SIZE       = 2
-const PREVIEW_TOOLTIP_MARGIN    = 12
-const PREVIEW_MARGIN            = 10
-const PREVIEW_WIDTH_PADDING     = 5
-const WHEEL_SWITCH_THRESHOLD    = 100
-const WHEEL_DEBOUNCE_MS         = 400
-const SCROLL_TOLERANCE          = 1
-const TIME_TOLERANCE            = 0.5
-const OVERLAY_FADE_DURATION     = 500
+const PREVIEW_MARGINS_TOTAL = 24;
+const PREVIEW_AVATAR_SIZE = 24; // matches the avatar's CSS width/height
+const PREVIEW_BORDER_SIZE = 2;
+const PREVIEW_TOOLTIP_MARGIN = 12;
+const PREVIEW_MARGIN = 10;
+const PREVIEW_WIDTH_PADDING = 5;
+const WHEEL_SWITCH_THRESHOLD = 100;
+const WHEEL_DEBOUNCE_MS = 400;
+const SCROLL_TOLERANCE = 1;
+const TIME_TOLERANCE = 0.5;
+const OVERLAY_FADE_DURATION = 500;
 
 // LIVE OVERLAY //
-let timeComments = []
-let activeOverlays = []
-let lastVideoTime = 0
-let overlayContainer = null
+let timeComments = [];
+let activeOverlays = [];
+let lastVideoTime = 0;
+let overlayContainer = null;
 
 // LIFECYCLE //
 // The add-on follows what is actually on screen instead of trusting YouTube's navigation
 // events to arrive in a predictable order (they don't, e.g. around the miniplayer).
-const DEBUG = false                       // true = log lifecycle decisions to the page console
-const WATCHDOG_INTERVAL_MS = 500          // how often the page is re-checked
-const HIT_RADIUS_PX = 8                   // how close (px) the cursor must be to a tick to hover it
-const HIT_BAND_ABOVE_PX = 24              // YouTube's own hover zone reaches well above the thin bar
-const HIT_BAND_BELOW_PX = 8
-const COMMENT_CACHE_TTL_MS = 10 * 60 * 1000
-const COMMENT_CACHE_MAX = 5
-const RETRY_DELAY_MS = 8000
+const DEBUG = false; // true = log lifecycle decisions to the page console
+const WATCHDOG_INTERVAL_MS = 500; // how often the page is re-checked
+const HIT_RADIUS_PX = 8; // how close (px) the cursor must be to a dot to hover it
+const HIT_BAND_ABOVE_PX = 24; // YouTube's own hover zone reaches well above the thin bar
+const HIT_BAND_BELOW_PX = 8;
+const COMMENT_CACHE_TTL_MS = 10 * 60 * 1000;
+const COMMENT_CACHE_MAX = 5;
+const RETRY_DELAY_MS = 8000;
 
-let activeVideoId = null                  // video the add-on is currently showing comments for
-let commentsReady = false                 // comments for activeVideoId are loaded
-let stampComments = []                    // what the progress bar shows
-let loadToken = 0                         // bumped on every (de)activation; cancels stale async work
-let retryVideoId = null
-let retryAt = 0
-let pendingMeta = null                    // { video, handler } waiting for loadedmetadata
-let hoveredStamp = null                   // stamp the preview is currently anchored to
-let previewRaf = 0                        // requestAnimationFrame id of the preview layout loop
-let stampEntries = []                     // ticks on screen: { el, fraction, commentsAtTime, index }
-let hoveredEntry = null                   // tick the cursor is currently over
-const hookedPlayers = new WeakSet()       // players that already have our mouse listeners
-let playerObserver = null                 // watches the player for our tick layer being removed
-let observedPlayer = null
-let reattachQueued = false
-let builtDuration = 0                     // video duration the current ticks were positioned with
-let awayFromWatch = false                 // true while off the watch page (e.g. playing in the miniplayer)
-let lastHoverLog = 0
-const openCommentInNewTab = createDebouncedCommentOpener()
-const commentCache = new Map()            // videoId -> { comments, at }
+let activeVideoId = null; // video the add-on is currently showing comments for
+let commentsReady = false; // comments for activeVideoId are loaded
+let dotComments = []; // what the progress bar shows
+let loadToken = 0; // bumped on every (de)activation; cancels stale async work
+let retryVideoId = null;
+let retryAt = 0;
+let pendingMeta = null; // { video, handler } waiting for loadedmetadata
+let hoveredDot = null; // dot the preview is currently anchored to
+let previewRaf = 0; // requestAnimationFrame id of the preview layout loop
+let dotEntries = []; // dots on screen: { el, fraction, time, commentsAtTime, index }
+let hoveredEntry = null; // dot the cursor is currently over
+const hookedPlayers = new WeakSet(); // players that already have our mouse listeners
+let playerObserver = null; // watches the player for our dots layer being removed
+let observedPlayer = null;
+let reattachQueued = false;
+let builtDuration = 0; // video duration the current dots were positioned with
+let awayFromWatch = false; // true while off the watch page (e.g. playing in the miniplayer)
+let lastHoverLog = 0;
+const openCommentInNewTab = createDebouncedCommentOpener();
+const commentCache = new Map(); // videoId -> { comments, at }
 
 function log(...args) {
-    if (DEBUG) console.log('[youtube-timestamps]', ...args)
+	if (DEBUG) console.log("[youtube-timestamps]", ...args);
 }
 
 // OPTIONS MENU //
-let OVERLAY_DURATION = 4000
-let MAX_CONCURRENT_OVERLAYS = 3
-let OVERLAY_OPACITY = 1
+let OVERLAY_DURATION = 4000;
+let MAX_CONCURRENT_OVERLAYS = 3;
+let OVERLAY_OPACITY = 1;
 // Comments with this many timestamps or more are hidden (null = off)
-let HIDE_STAMPS_MIN_TIMESTAMPS = null
-let HIDE_OVERLAYS_MIN_TIMESTAMPS = null
+let HIDE_DOTS_MIN_TIMESTAMPS = null;
+let HIDE_OVERLAYS_MIN_TIMESTAMPS = null;
 // Overlay placement and size
-const OVERLAY_POSITIONS = ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right']
-let OVERLAY_POSITION = 'top-left'
-let OVERLAY_SCALE = 1
-let OVERLAY_SLIDE_HORIZONTAL = false     // false: slide up/down; true: slide left/right
-let OVERLAY_WIDTH_FIT = false             // false: every overlay as wide as the widest; true: each fits its own text
+const OVERLAY_POSITIONS = [
+	"top-left",
+	"top-center",
+	"top-right",
+	"bottom-left",
+	"bottom-center",
+	"bottom-right",
+];
+let OVERLAY_POSITION = "top-left";
+let OVERLAY_SCALE = 1;
+let OVERLAY_SLIDE_HORIZONTAL = false; // false: slide up/down; true: slide left/right
+let OVERLAY_WIDTH_FIT = false; // false: every overlay as wide as the widest; true: each fits its own text
 // When overlays come and go the others glide to their new place instead of jumping
-const OVERLAY_REFLOW_MS = 320
-const OVERLAY_REFLOW_EASING = 'cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+const OVERLAY_REFLOW_MS = 320;
+const OVERLAY_REFLOW_EASING = "cubic-bezier(0.25, 0.46, 0.45, 0.94)";
 // What is shown with each comment (all default to the original look: just the @handle)
-let AUTHOR_NAME_MODE = 'handle'           // 'handle' | 'display' | 'both'
-let SHOW_LIKES = false
-let SHOW_REPLIES = false
-let SHOW_PUBLISHED = false
-let SHOW_BADGES = false
-let FULLSCREEN_SCALE = null               // explicit full screen size; null = scale automatically
+let AUTHOR_NAME_MODE = "handle"; // 'handle' | 'display' | 'both'
+let SHOW_LIKES = false;
+let SHOW_REPLIES = false;
+let SHOW_PUBLISHED = false;
+let SHOW_BADGES = false;
+let FULLSCREEN_SCALE = null; // explicit full screen size; null = scale automatically
 // Automatic full screen scaling: overlays grow with the player so they keep about the same
 // share of the screen, instead of shrinking to a corner when the video gets big.
-const FULLSCREEN_AUTO_REFERENCE_HEIGHT = 540   // player height (px) at which the normal size is "100%"
-const FULLSCREEN_AUTO_MAX = 3
-const OVERLAY_BOTTOM_OFFSET_MIN = 70           // px kept clear above the controls for bottom positions
+const FULLSCREEN_AUTO_REFERENCE_HEIGHT = 540; // player height (px) at which the normal size is "100%"
+const FULLSCREEN_AUTO_MAX = 3;
+const OVERLAY_BOTTOM_OFFSET_MIN = 70; // px kept clear above the controls for bottom positions
 
-const optionsReady = browser.storage.sync.get(['maxConcurrentOverlays','overlayDuration','overlayOpacity','hideStampsMinTimestamps','hideOverlaysMinTimestamps','overlayPosition','overlaySize','fullscreenOverlaySize','authorNameMode','showLikes','showReplies','showPublished','showBadges','overlayWidthMode','overlayAnimationAxis'])
-.then((items) => {
-    if (OVERLAY_POSITIONS.includes(items.overlayPosition)) {
-        OVERLAY_POSITION = items.overlayPosition
-    }
-    if (Number.isFinite(items.overlaySize) && items.overlaySize >= 50 && items.overlaySize <= 200) {
-        OVERLAY_SCALE = items.overlaySize / 100
-    }
-    if (items.authorNameMode === 'display' || items.authorNameMode === 'both') {
-        AUTHOR_NAME_MODE = items.authorNameMode
-    }
-    OVERLAY_WIDTH_FIT = items.overlayWidthMode === 'fit'
-    OVERLAY_SLIDE_HORIZONTAL = items.overlayAnimationAxis === 'horizontal'
-    SHOW_LIKES = items.showLikes === true
-    SHOW_REPLIES = items.showReplies === true
-    SHOW_PUBLISHED = items.showPublished === true
-    SHOW_BADGES = items.showBadges === true
-    if (Number.isFinite(items.fullscreenOverlaySize) && items.fullscreenOverlaySize >= 50 && items.fullscreenOverlaySize <= 400) {
-        FULLSCREEN_SCALE = items.fullscreenOverlaySize / 100
-    }
-    if (Number.isInteger(items.hideStampsMinTimestamps) && items.hideStampsMinTimestamps >= 2) {
-        HIDE_STAMPS_MIN_TIMESTAMPS = items.hideStampsMinTimestamps
-    }
-    if (Number.isInteger(items.hideOverlaysMinTimestamps) && items.hideOverlaysMinTimestamps >= 2) {
-        HIDE_OVERLAYS_MIN_TIMESTAMPS = items.hideOverlaysMinTimestamps
-    }
-    if (items.hasOwnProperty('maxConcurrentOverlays') && typeof items.maxConcurrentOverlays === 'number') {
-        MAX_CONCURRENT_OVERLAYS = items.maxConcurrentOverlays
-    }
-    if (items.hasOwnProperty('overlayDuration') && typeof items.overlayDuration === 'number') {
-        OVERLAY_DURATION = items.overlayDuration
-    }
-    if (items.hasOwnProperty('overlayOpacity') && typeof items.overlayOpacity === 'number') {
-        OVERLAY_OPACITY = items.overlayOpacity
-    }
+const optionsReady = browser.storage.sync
+	.get([
+		"maxConcurrentOverlays",
+		"overlayDuration",
+		"overlayOpacity",
+		"hideStampsMinTimestamps",
+		"hideOverlaysMinTimestamps",
+		"overlayPosition",
+		"overlaySize",
+		"fullscreenOverlaySize",
+		"authorNameMode",
+		"showLikes",
+		"showReplies",
+		"showPublished",
+		"showBadges",
+		"overlayWidthMode",
+		"overlayAnimationAxis",
+	])
+	.then((items) => {
+		if (OVERLAY_POSITIONS.includes(items.overlayPosition)) {
+			OVERLAY_POSITION = items.overlayPosition;
+		}
+		if (
+			Number.isFinite(items.overlaySize) &&
+			items.overlaySize >= 50 &&
+			items.overlaySize <= 200
+		) {
+			OVERLAY_SCALE = items.overlaySize / 100;
+		}
+		if (items.authorNameMode === "display" || items.authorNameMode === "both") {
+			AUTHOR_NAME_MODE = items.authorNameMode;
+		}
+		OVERLAY_WIDTH_FIT = items.overlayWidthMode === "fit";
+		OVERLAY_SLIDE_HORIZONTAL = items.overlayAnimationAxis === "horizontal";
+		SHOW_LIKES = items.showLikes === true;
+		SHOW_REPLIES = items.showReplies === true;
+		SHOW_PUBLISHED = items.showPublished === true;
+		SHOW_BADGES = items.showBadges === true;
+		if (
+			Number.isFinite(items.fullscreenOverlaySize) &&
+			items.fullscreenOverlaySize >= 50 &&
+			items.fullscreenOverlaySize <= 400
+		) {
+			FULLSCREEN_SCALE = items.fullscreenOverlaySize / 100;
+		}
+		if (
+			Number.isInteger(items.hideStampsMinTimestamps) &&
+			items.hideStampsMinTimestamps >= 2
+		) {
+			HIDE_DOTS_MIN_TIMESTAMPS = items.hideStampsMinTimestamps;
+		}
+		if (
+			Number.isInteger(items.hideOverlaysMinTimestamps) &&
+			items.hideOverlaysMinTimestamps >= 2
+		) {
+			HIDE_OVERLAYS_MIN_TIMESTAMPS = items.hideOverlaysMinTimestamps;
+		}
+		if (
+			items.hasOwnProperty("maxConcurrentOverlays") &&
+			typeof items.maxConcurrentOverlays === "number"
+		) {
+			MAX_CONCURRENT_OVERLAYS = items.maxConcurrentOverlays;
+		}
+		if (
+			items.hasOwnProperty("overlayDuration") &&
+			typeof items.overlayDuration === "number"
+		) {
+			OVERLAY_DURATION = items.overlayDuration;
+		}
+		if (
+			items.hasOwnProperty("overlayOpacity") &&
+			typeof items.overlayOpacity === "number"
+		) {
+			OVERLAY_OPACITY = items.overlayOpacity;
+		}
 
-    const existing = document.querySelectorAll('.__youtube-timestamps__live-overlay')
-    existing.forEach(el => {
-        el.style.setProperty('--yt-user-opacity', String(OVERLAY_OPACITY))
-    })
-})
-.catch((err) => {
-})
+		const existing = document.querySelectorAll(
+			".__youtube-timestamps__live-overlay",
+		);
+		existing.forEach((el) => {
+			el.style.setProperty("--yt-user-opacity", String(OVERLAY_OPACITY));
+		});
+	})
+	.catch((err) => {});
 
 // Decides what the add-on should be doing right now and fixes any difference. Safe to call
 // at any time, any number of times: on navigation events, on a timer, on script load.
 async function sync() {
-    const watchId = getVideoId()
+	const watchId = getVideoId();
 
-    if (!watchId) {
-        // Not on a watch page (home, subscriptions, ...). The player may be sitting in the
-        // miniplayer and come back, so keep everything that is loaded and attached; just make
-        // sure nothing pops up or stays on screen meanwhile.
-        if (overlayContainer || hoveredEntry) {
-            log('left watch page, pausing overlays and preview')
-            removeOverlayContainer()
-            hidePreview()
-        }
-        if (!awayFromWatch) log('not on a watch page (miniplayer?), hiding ticks')
-        awayFromWatch = true
-        setBarHidden(true)   // no ticks in the miniplayer; they stay attached and come back with the player
-        return
-    }
+	if (!watchId) {
+		// Not on a watch page (home, subscriptions, ...). The player may be sitting in the
+		// miniplayer and come back, so keep everything that is loaded and attached; just make
+		// sure nothing pops up or stays on screen meanwhile.
+		if (overlayContainer || hoveredEntry) {
+			log("left watch page, pausing overlays and preview");
+			removeOverlayContainer();
+			hidePreview();
+		}
+		if (!awayFromWatch) log("not on a watch page (miniplayer?), hiding dots");
+		awayFromWatch = true;
+		setDotsHidden(true); // no dots in the miniplayer; they stay attached and come back with the player
+		return;
+	}
 
-    setBarHidden(false)
+	setDotsHidden(false);
 
-    if (awayFromWatch) {
-        awayFromWatch = false
-        if (watchId === activeVideoId && commentsReady) {
-            // Don't trust anything left over from before: geometry, hooks and the video itself
-            // may all have changed while the player was parked elsewhere.
-            log('back on the watch page, rebuilding the tick layer from scratch')
-            rebuildBar()
-            return
-        }
-    }
+	if (awayFromWatch) {
+		awayFromWatch = false;
+		if (watchId === activeVideoId && commentsReady) {
+			// Don't trust anything left over from before: geometry, hooks and the video itself
+			// may all have changed while the player was parked elsewhere.
+			log("back on the watch page, rebuilding the dots from scratch");
+			rebuildDots();
+			return;
+		}
+	}
 
-    if (watchId !== activeVideoId) {
-        if (retryVideoId === watchId && Date.now() < retryAt) return
-        await activate(watchId)
-        return
-    }
+	if (watchId !== activeVideoId) {
+		if (retryVideoId === watchId && Date.now() < retryAt) return;
+		await activate(watchId);
+		return;
+	}
 
-    ensureAttached()
+	ensureAttached();
 }
 
 async function activate(videoId) {
-    deactivate()
-    const token = loadToken
-    activeVideoId = videoId
-    log('activating', videoId)
+	deactivate();
+	const token = loadToken;
+	activeVideoId = videoId;
+	log("activating", videoId);
 
-    const [comments] = await Promise.all([
-        loadComments(videoId),
-        waitForSelector('#movie_player video', 2000).catch(() => null),
-        optionsReady
-    ])
+	const [comments] = await Promise.all([
+		loadComments(videoId),
+		waitForSelector("#movie_player video", 2000).catch(() => null),
+		optionsReady,
+	]);
 
-    if (token !== loadToken) return   // superseded while loading
+	if (token !== loadToken) return; // superseded while loading
 
-    if (comments === null) {
-        log('loading comments failed, will retry')
-        activeVideoId = null
-        retryVideoId = videoId
-        retryAt = Date.now() + RETRY_DELAY_MS
-        return
-    }
+	if (comments === null) {
+		log("loading comments failed, will retry");
+		activeVideoId = null;
+		retryVideoId = videoId;
+		retryAt = Date.now() + RETRY_DELAY_MS;
+		return;
+	}
 
-    if (getVideoId() !== videoId) return   // URL moved on; the next sync() sorts it out
+	if (getVideoId() !== videoId) return; // URL moved on; the next sync() sorts it out
 
-    timeComments = filterByTimestampCount(comments, HIDE_OVERLAYS_MIN_TIMESTAMPS)
-    stampComments = filterByTimestampCount(comments, HIDE_STAMPS_MIN_TIMESTAMPS)
-    commentsReady = true
-    log('ready', videoId, comments.length, 'timestamps;', stampComments.length, 'left for the bar and',
-        timeComments.length, 'for overlays after the "N+ timestamps" filters (bar filter:',
-        HIDE_STAMPS_MIN_TIMESTAMPS ?? 'off', ', overlay filter:', HIDE_OVERLAYS_MIN_TIMESTAMPS ?? 'off', ')')
-    addTimeComments(stampComments, token)
+	timeComments = filterByTimestampCount(comments, HIDE_OVERLAYS_MIN_TIMESTAMPS);
+	dotComments = filterByTimestampCount(comments, HIDE_DOTS_MIN_TIMESTAMPS);
+	commentsReady = true;
+	log(
+		"ready",
+		videoId,
+		comments.length,
+		"timestamps;",
+		dotComments.length,
+		"left for the bar and",
+		timeComments.length,
+		'for overlays after the "N+ timestamps" filters (bar filter:',
+		HIDE_DOTS_MIN_TIMESTAMPS ?? "off",
+		", overlay filter:",
+		HIDE_OVERLAYS_MIN_TIMESTAMPS ?? "off",
+		")",
+	);
+	addTimeComments(dotComments, token);
 }
 
 function deactivate() {
-    loadToken++
-    activeVideoId = null
-    commentsReady = false
-    builtDuration = 0
-    timeComments = []
-    stampComments = []
-    removeBar()
-    removeOverlayContainer()
-    hidePreview()
+	loadToken++;
+	if (activeVideoId) releaseComments(activeVideoId);
+	stopKeepAlive();
+	activeVideoId = null;
+	commentsReady = false;
+	builtDuration = 0;
+	timeComments = [];
+	dotComments = [];
+	removeDots();
+	removeOverlayContainer();
+	hidePreview();
 }
 
 // Makes sure the UI is attached to the current player and sized correctly. Cheap when everything
 // is fine, so it runs on a timer, on resize/fullscreen, and whenever our layer gets removed.
 function ensureAttached() {
-    if (!commentsReady || !getVideoId()) return
-    const player = getPlayer()
-    if (!player) return
+	if (!commentsReady || !getVideoId()) return;
+	const player = getPlayer();
+	if (!player) return;
 
-    hookPlayer(player)
-    observePlayer(player)
+	hookPlayer(player);
+	observePlayer(player);
 
-    if (overlayContainer && !player.contains(overlayContainer)) {
-        log('overlay container no longer in the player, dropping it')
-        removeOverlayContainer()
-    }
-    applyOverlayScale()
+	if (overlayContainer && !player.contains(overlayContainer)) {
+		log("overlay container no longer in the player, dropping it");
+		removeOverlayContainer();
+	}
+	applyOverlayScale();
 
-    const video = getVideo()
-    const duration = video?.duration
-    if (!(Number.isFinite(duration) && duration > 0)) return
+	const video = getVideo();
+	const duration = video?.duration;
+	if (!(Number.isFinite(duration) && duration > 0)) return;
 
-    // YouTube reuses one <video> for every video, so it can still report the previous video's
-    // length when ticks get built. Ticks positioned with the wrong length are in the wrong place.
-    if (builtDuration && Math.abs(duration - builtDuration) > 0.5) {
-        log('video duration changed', Math.round(builtDuration), '->', Math.round(duration), ', rebuilding ticks')
-        rebuildBar()
-        return
-    }
+	// YouTube reuses one <video> for every video, so it can still report the previous video's
+	// length when dots get built. Dots positioned with the wrong length are in the wrong place.
+	if (builtDuration && Math.abs(duration - builtDuration) > 0.5) {
+		log(
+			"video duration changed",
+			Math.round(builtDuration),
+			"->",
+			Math.round(duration),
+			", rebuilding dots",
+		);
+		rebuildDots();
+		return;
+	}
 
-    const bars = document.querySelectorAll('.__youtube-timestamps__bar')
-    if (bars.length !== 1 || bars[0].parentElement !== getBarMountPoint(player)) {
-        log('tick layer missing or misplaced, rebuilding')
-        removeBar()
-        addTimeComments(stampComments)
-        return
-    }
-    layoutBar(bars[0])
+	const layers = document.querySelectorAll(".__youtube-timestamps__dots");
+	if (
+		layers.length !== 1 ||
+		layers[0].parentElement !== getDotsMountPoint(player)
+	) {
+		log("dots layer missing or misplaced, rebuilding");
+		removeDots();
+		addTimeComments(dotComments);
+		return;
+	}
+	layoutDots(layers[0]);
 }
 
-function setBarHidden(hidden) {
-    const display = hidden ? 'none' : ''
-    document.querySelectorAll('.__youtube-timestamps__bar').forEach(bar => {
-        if (bar.style.display !== display) bar.style.display = display
-    })
+function setDotsHidden(hidden) {
+	const display = hidden ? "none" : "";
+	document.querySelectorAll(".__youtube-timestamps__dots").forEach((dots) => {
+		if (dots.style.display !== display) dots.style.display = display;
+	});
 }
 
-function rebuildBar() {
-    removeBar()
-    addTimeComments(stampComments)
-    // the player may still be settling into its new size: re-check shortly after
-    for (const delay of [150, 400, 900]) setTimeout(scheduleReattach, delay)
+function rebuildDots() {
+	removeDots();
+	addTimeComments(dotComments);
+	// the player may still be settling into its new size: re-check shortly after
+	for (const delay of [150, 400, 900]) setTimeout(scheduleReattach, delay);
+}
+
+// Brings the dots up to date with a fuller list WITHOUT tearing anything down: dots that already
+// exist stay the same elements, new times are added, and an open preview stays open. (A rebuild
+// closes the preview and redraws every dot, which is wrong to do every few seconds while a long
+// scan keeps sending updates.) Anything unusual falls back to a full rebuild.
+function updateDots(comments) {
+	const dots = document.querySelector(".__youtube-timestamps__dots");
+	const duration = getVideo()?.duration;
+	if (
+		!dots ||
+		!(Number.isFinite(duration) && duration > 0) ||
+		(builtDuration && Math.abs(duration - builtDuration) > 0.5)
+	) {
+		rebuildDots();
+		return;
+	}
+
+	const groups = new Map();
+	for (const tc of comments) {
+		if (typeof tc.time !== "number" || tc.time > duration) continue;
+		if (!groups.has(tc.time)) groups.set(tc.time, []);
+		groups.get(tc.time).push(tc);
+	}
+
+	const existing = new Map(dotEntries.map((entry) => [entry.time, entry]));
+	for (const [time, entry] of existing) {
+		if (groups.has(time)) continue;
+		if (entry === hoveredEntry) hidePreview();
+		entry.el.remove();
+		dotEntries.splice(dotEntries.indexOf(entry), 1);
+		existing.delete(time);
+	}
+
+	for (const [time, commentsAtTime] of groups) {
+		const entry = existing.get(time);
+		if (!entry) {
+			dots.appendChild(createTimestampDot(time, duration, commentsAtTime));
+			continue;
+		}
+		const changed = commentsAtTime.length !== entry.commentsAtTime.length;
+		entry.commentsAtTime = commentsAtTime;
+		entry.index = Math.min(entry.index, commentsAtTime.length - 1);
+		entry.el.classList.toggle(
+			"__youtube-timestamps__dot--multiple",
+			commentsAtTime.length > 1,
+		);
+		if (changed && entry === hoveredEntry) {
+			const nav = document.querySelector(".__youtube-timestamps__preview__nav");
+			if (nav) {
+				nav.textContent = `${entry.index + 1} of ${commentsAtTime.length} comments`;
+				nav.style.display = commentsAtTime.length > 1 ? "block" : "none";
+			}
+		}
+	}
+	layoutDots(dots);
 }
 
 function scheduleReattach() {
-    if (reattachQueued) return
-    reattachQueued = true
-    requestAnimationFrame(() => {
-        reattachQueued = false
-        ensureAttached()
-    })
+	if (reattachQueued) return;
+	reattachQueued = true;
+	requestAnimationFrame(() => {
+		reattachQueued = false;
+		ensureAttached();
+	});
 }
 
 // YouTube tears down and rebuilds parts of the player. If that takes our layer with it, put it
 // back right away instead of waiting for the next timer tick.
 function observePlayer(player) {
-    if (observedPlayer === player && playerObserver) return
-    playerObserver?.disconnect()
-    observedPlayer = player
-    playerObserver = new MutationObserver(() => {
-        if (commentsReady && !document.querySelector('.__youtube-timestamps__bar')) scheduleReattach()
-    })
-    playerObserver.observe(player, { childList: true, subtree: true })
+	if (observedPlayer === player && playerObserver) return;
+	playerObserver?.disconnect();
+	observedPlayer = player;
+	playerObserver = new MutationObserver(() => {
+		if (commentsReady && !document.querySelector(".__youtube-timestamps__dots"))
+			scheduleReattach();
+	});
+	playerObserver.observe(player, { childList: true, subtree: true });
 }
 
 async function loadComments(videoId) {
-    const cached = commentCache.get(videoId)
-    if (cached && Date.now() - cached.at < COMMENT_CACHE_TTL_MS) {
-        log('comments from cache', videoId)
-        return cached.comments
-    }
+	const cached = commentCache.get(videoId);
+	// An unfinished scan is never served from here: asking the background again attaches to the
+	// scan that is still running (or to its finished result) and costs no new requests.
+	if (
+		cached &&
+		cached.complete &&
+		Date.now() - cached.at < COMMENT_CACHE_TTL_MS
+	) {
+		log("comments from cache", videoId);
+		return cached.comments;
+	}
 
-    const comments = await fetchTimeComments(videoId)
-    if (!Array.isArray(comments)) return null
+	const result = await fetchTimeComments(videoId);
+	if (!result) return null;
 
-    commentCache.set(videoId, { comments, at: Date.now() })
-    while (commentCache.size > COMMENT_CACHE_MAX) {
-        commentCache.delete(commentCache.keys().next().value)
-    }
-    return comments
+	cacheComments(videoId, result.comments, result.done);
+	if (!result.done) startKeepAlive(videoId);
+	return result.comments;
+}
+
+// While the background is still scanning, tell it we are here every 20 s. That keeps its page from
+// being suspended mid-scan, and its answer tells us if the scan was lost or finished without us
+// hearing about it, in which case we ask again (which returns the finished list or starts over).
+const KEEP_ALIVE_MS = 20000;
+let keepAliveTimer = null;
+
+function startKeepAlive(videoId) {
+	stopKeepAlive();
+	keepAliveTimer = setInterval(() => pingBackground(videoId), KEEP_ALIVE_MS);
+}
+
+function stopKeepAlive() {
+	if (keepAliveTimer !== null) clearInterval(keepAliveTimer);
+	keepAliveTimer = null;
+}
+
+async function pingBackground(videoId) {
+	if (videoId !== activeVideoId) return stopKeepAlive();
+	let reply = null;
+	try {
+		reply = await browser.runtime.sendMessage({ type: "keepAlive", videoId });
+	} catch (err) {
+		return; // background unreachable right now: try again next time
+	}
+	if (videoId !== activeVideoId) return;
+	if (reply && reply.alive && !reply.done) return; // still scanning, updates will come
+	const result = await fetchTimeComments(videoId);
+	if (result && videoId === activeVideoId)
+		applyCommentsUpdate(videoId, result.comments, result.done);
+}
+
+function cacheComments(videoId, comments, complete) {
+	commentCache.set(videoId, { comments, at: Date.now(), complete });
+	while (commentCache.size > COMMENT_CACHE_MAX) {
+		commentCache.delete(commentCache.keys().next().value);
+	}
+}
+
+// A long scan keeps going in the background after the first answer and sends fuller lists as it
+// finds more. Swap them in and rebuild the dots; the overlays read `timeComments` live.
+browser.runtime.onMessage.addListener((message) => {
+	if (message?.type === "timeCommentsUpdate")
+		applyCommentsUpdate(
+			message.videoId,
+			message.comments,
+			message.done === true,
+		);
+});
+
+function applyCommentsUpdate(videoId, comments, done) {
+	if (typeof videoId !== "string" || !Array.isArray(comments)) return;
+	cacheComments(videoId, comments, done);
+	if (done && videoId === activeVideoId) stopKeepAlive();
+	if (videoId !== activeVideoId || !commentsReady || getVideoId() !== videoId)
+		return;
+
+	const before = dotComments.length;
+	timeComments = filterByTimestampCount(comments, HIDE_OVERLAYS_MIN_TIMESTAMPS);
+	dotComments = filterByTimestampCount(comments, HIDE_DOTS_MIN_TIMESTAMPS);
+	log(
+		"update",
+		videoId,
+		comments.length,
+		"timestamps so far",
+		done ? "(complete)" : "",
+	);
+	// Lists only grow while a scan runs, so an equal length means nothing changed on screen
+	if (dotComments.length !== before) updateDots(dotComments);
+}
+
+function releaseComments(videoId) {
+	try {
+		browser.runtime
+			.sendMessage({ type: "releaseTimeComments", videoId })
+			?.catch?.(() => {});
+	} catch (err) {
+		// background not reachable: nothing to release
+	}
 }
 
 // Drops every timestamp of comments that contain `minTimestamps` or more timestamps.
 // Catches chapter lists, "best moments" lists, etc. The background script emits one
 // entry per timestamp occurrence, so entries per commentId = timestamps in that comment.
 function filterByTimestampCount(comments, minTimestamps) {
-    if (!Array.isArray(comments)) return []
-    if (minTimestamps == null) return comments
+	if (!Array.isArray(comments)) return [];
+	if (minTimestamps == null) return comments;
 
-    const counts = new Map()
-    for (const tc of comments) {
-        counts.set(tc.commentId, (counts.get(tc.commentId) || 0) + 1)
-    }
-    return comments.filter(tc => counts.get(tc.commentId) < minTimestamps)
+	const counts = new Map();
+	for (const tc of comments) {
+		counts.set(tc.commentId, (counts.get(tc.commentId) || 0) + 1);
+	}
+	return comments.filter((tc) => counts.get(tc.commentId) < minTimestamps);
 }
 
 function getVideoId() {
-    if (window.location.pathname === '/watch') {
-        return parseParams(window.location.href)['v']
-    }
-    return null
+	if (window.location.pathname === "/watch") {
+		return parseParams(window.location.href)["v"];
+	}
+	return null;
 }
 
 // The watch-page player. YouTube moves one player between the watch page and the miniplayer,
 // so prefer the one inside the watch page and fall back to any #movie_player.
 function getPlayer() {
-    return document.querySelector('ytd-watch-flexy #movie_player, ytd-watch-grid #movie_player')
-        || document.querySelector('#movie_player')
+	return (
+		document.querySelector(
+			"ytd-watch-flexy #movie_player, ytd-watch-grid #movie_player",
+		) || document.querySelector("#movie_player")
+	);
 }
 
 function getVideo() {
-    return getPlayer()?.querySelector('video') || null
+	return getPlayer()?.querySelector("video") || null;
 }
 
-// Resolves to the comments array, or null if the background failed or never answered
+// Resolves to { comments, done } (done: false while the background is still scanning), or null
+// if the background failed or never answered
 function fetchTimeComments(videoId) {
-    return new Promise((resolve) => {
-        const timer = setTimeout(() => resolve(null), 60000)
-        try {
-            browser.runtime.sendMessage({type: 'fetchTimeComments', videoId}, (response) => {
-                clearTimeout(timer)
-                resolve(Array.isArray(response) ? response : null)
-            })
-        } catch (err) {
-            clearTimeout(timer)
-            resolve(null)
-        }
-    })
+	return new Promise((resolve) => {
+		const timer = setTimeout(() => resolve(null), 60000);
+		try {
+			browser.runtime.sendMessage(
+				{ type: "fetchTimeComments", videoId },
+				(response) => {
+					clearTimeout(timer);
+					if (response && Array.isArray(response.comments)) {
+						resolve({
+							comments: response.comments,
+							done: response.done !== false,
+						});
+					} else {
+						resolve(null);
+					}
+				},
+			);
+		} catch (err) {
+			clearTimeout(timer);
+			resolve(null);
+		}
+	});
 }
 
 function handleTimeUpdate(event) {
-    if (!getVideoId()) return   // e.g. playing in the miniplayer: no popups
-    const video = event.target
-    const currentTime = video.currentTime
+	if (!getVideoId()) return; // e.g. playing in the miniplayer: no popups
+	const video = event.target;
+	const currentTime = video.currentTime;
 
-    if (video.paused || Math.abs(currentTime - lastVideoTime) < 0.1) {
-        lastVideoTime = currentTime
-        return
-    }
+	if (video.paused || Math.abs(currentTime - lastVideoTime) < 0.1) {
+		lastVideoTime = currentTime;
+		return;
+	}
 
-    const commentsToShow = timeComments.filter(tc => {
-        const timeDiff = Math.abs(tc.time - currentTime)
-        return timeDiff <= TIME_TOLERANCE && !isCommentCurrentlyShown(tc)
-    })
+	const commentsToShow = timeComments.filter((tc) => {
+		const timeDiff = Math.abs(tc.time - currentTime);
+		return timeDiff <= TIME_TOLERANCE && !isCommentCurrentlyShown(tc);
+	});
 
-    commentsToShow.forEach(showLiveOverlay)
-    lastVideoTime = currentTime
+	commentsToShow.forEach(showLiveOverlay);
+	lastVideoTime = currentTime;
 }
 
 function isCommentCurrentlyShown(comment) {
-    return activeOverlays.some(overlay =>
-        overlay.commentId === comment.commentId &&
-        overlay.timestamp === comment.timestamp
-    )
+	return activeOverlays.some(
+		(overlay) =>
+			overlay.commentId === comment.commentId &&
+			overlay.timestamp === comment.timestamp,
+	);
 }
 
 function showLiveOverlay(timeComment) {
-    if (activeOverlays.length >= MAX_CONCURRENT_OVERLAYS) {
-        const oldestOverlay = activeOverlays.shift()
-        removeOverlay(oldestOverlay)
-    }
+	if (activeOverlays.length >= MAX_CONCURRENT_OVERLAYS) {
+		const oldestOverlay = activeOverlays.shift();
+		removeOverlay(oldestOverlay);
+	}
 
-    const container = getOrCreateOverlayContainer()
-    const overlay = createOverlayElement(timeComment)
+	const container = getOrCreateOverlayContainer();
+	const overlay = createOverlayElement(timeComment);
 
-    // The overlay itself is zoomed (for the size setting). Its wrapper is not, so everything that
-    // measures or animates positions can work in plain pixels.
-    const slot = document.createElement('div')
-    slot.className = '__youtube-timestamps__overlay-slot'
-    slot.appendChild(overlay)
+	// The overlay itself is zoomed (for the size setting). Its wrapper is not, so everything that
+	// measures or animates positions can work in plain pixels.
+	const slot = document.createElement("div");
+	slot.className = "__youtube-timestamps__overlay-slot";
+	slot.appendChild(overlay);
 
-    const overlayData = {
-        element: overlay,
-        slot,
-        commentId: timeComment.commentId,
-        timestamp: timeComment.timestamp,
-        startTime: Date.now()
-    }
-    // For stacks anchored to the bottom a new overlay pushes the older ones up
-    animateReflow(() => {
-        container.appendChild(slot)
-        activeOverlays.push(overlayData)
-    })
+	const overlayData = {
+		element: overlay,
+		slot,
+		commentId: timeComment.commentId,
+		timestamp: timeComment.timestamp,
+		startTime: Date.now(),
+	};
+	// For stacks anchored to the bottom a new overlay pushes the older ones up
+	animateReflow(() => {
+		container.appendChild(slot);
+		activeOverlays.push(overlayData);
+	});
 
-    requestAnimationFrame(() => {
-        overlay.style.opacity = String(OVERLAY_OPACITY)
-        overlay.style.transform = 'translateX(0)'
-    })
+	requestAnimationFrame(() => {
+		overlay.style.opacity = String(OVERLAY_OPACITY);
+		overlay.style.transform = "translateX(0)";
+	});
 
-    setTimeout(() => {
-        removeOverlay(overlayData)
-    }, OVERLAY_DURATION)
+	setTimeout(() => {
+		removeOverlay(overlayData);
+	}, OVERLAY_DURATION);
 }
 
 function isPlayerFullscreen(player = getPlayer()) {
-    return !!document.fullscreenElement || !!player?.classList.contains('ytp-fullscreen')
+	return (
+		!!document.fullscreenElement ||
+		!!player?.classList.contains("ytp-fullscreen")
+	);
 }
 
 // Size of the overlays right now: the normal size, or in full screen either the explicit
 // full screen size or the normal size scaled up with the player.
 function currentOverlayScale() {
-    const player = getPlayer()
-    if (!isPlayerFullscreen(player)) return OVERLAY_SCALE
-    if (FULLSCREEN_SCALE !== null) return FULLSCREEN_SCALE
+	const player = getPlayer();
+	if (!isPlayerFullscreen(player)) return OVERLAY_SCALE;
+	if (FULLSCREEN_SCALE !== null) return FULLSCREEN_SCALE;
 
-    const height = player?.getBoundingClientRect().height || 0
-    const auto = Math.min(Math.max(height / FULLSCREEN_AUTO_REFERENCE_HEIGHT, 1), FULLSCREEN_AUTO_MAX)
-    return OVERLAY_SCALE * auto
+	const height = player?.getBoundingClientRect().height || 0;
+	const auto = Math.min(
+		Math.max(height / FULLSCREEN_AUTO_REFERENCE_HEIGHT, 1),
+		FULLSCREEN_AUTO_MAX,
+	);
+	return OVERLAY_SCALE * auto;
 }
 
 // Bottom positions have to clear the controls, which are taller in full screen
 function currentOverlayBottomOffset() {
-    const player = getPlayer()
-    const controls = player?.querySelector('.ytp-chrome-bottom')
-    if (!player || !controls) return OVERLAY_BOTTOM_OFFSET_MIN
-    const controlsRect = controls.getBoundingClientRect()
-    if (!(controlsRect.height > 0)) return OVERLAY_BOTTOM_OFFSET_MIN
-    const needed = Math.round(player.getBoundingClientRect().bottom - controlsRect.top + 12)
-    return Math.min(Math.max(needed, OVERLAY_BOTTOM_OFFSET_MIN), 200)
+	const player = getPlayer();
+	const controls = player?.querySelector(".ytp-chrome-bottom");
+	if (!player || !controls) return OVERLAY_BOTTOM_OFFSET_MIN;
+	const controlsRect = controls.getBoundingClientRect();
+	if (!(controlsRect.height > 0)) return OVERLAY_BOTTOM_OFFSET_MIN;
+	const needed = Math.round(
+		player.getBoundingClientRect().bottom - controlsRect.top + 12,
+	);
+	return Math.min(Math.max(needed, OVERLAY_BOTTOM_OFFSET_MIN), 200);
 }
 
 function setOverlayVars(container) {
-    const scale = String(Math.round(currentOverlayScale() * 1000) / 1000)
-    const bottom = currentOverlayBottomOffset() + 'px'
-    if (container.style.getPropertyValue('--yt-overlay-scale') !== scale) {
-        container.style.setProperty('--yt-overlay-scale', scale)
-    }
-    if (container.style.getPropertyValue('--yt-overlay-bottom') !== bottom) {
-        container.style.setProperty('--yt-overlay-bottom', bottom)
-    }
+	const scale = String(Math.round(currentOverlayScale() * 1000) / 1000);
+	const bottom = currentOverlayBottomOffset() + "px";
+	if (container.style.getPropertyValue("--yt-overlay-scale") !== scale) {
+		container.style.setProperty("--yt-overlay-scale", scale);
+	}
+	if (container.style.getPropertyValue("--yt-overlay-bottom") !== bottom) {
+		container.style.setProperty("--yt-overlay-bottom", bottom);
+	}
 }
 
 // Re-applied on resize / fullscreen changes so overlays that are already showing resize live
 function applyOverlayScale() {
-    if (overlayContainer?.isConnected) setOverlayVars(overlayContainer)
+	if (overlayContainer?.isConnected) setOverlayVars(overlayContainer);
 }
 
 // Overlays slide in from above when anchored to the top, from below when anchored to the bottom
 // Overlays slide in from, and back out to, the screen edge their stack is anchored to.
 //   up/down:    top stacks come in moving down and leave moving up; bottom stacks the other way round
 //   left/right: left stacks come in moving right and leave moving left; right stacks the other way round
-//               (centred stacks have no side, so they behave like left ones)
+//               (centred stacks have no left or right edge, so they always slide up/down)
 // Each value is where the overlay starts (entering) or ends up (leaving), relative to its resting place.
 function overlayMotion() {
-    if (OVERLAY_SLIDE_HORIZONTAL) {
-        const side = OVERLAY_POSITION.endsWith('right') ? 1 : -1
-        return { enter: `translateX(${side * 24}px)`, exit: `translateX(${side * 14}px)` }
-    }
-    const side = OVERLAY_POSITION.startsWith('bottom') ? 1 : -1
-    return { enter: `translateY(${side * 20}px)`, exit: `translateY(${side * 12}px)` }
+	if (OVERLAY_SLIDE_HORIZONTAL && !OVERLAY_POSITION.endsWith("center")) {
+		const side = OVERLAY_POSITION.endsWith("right") ? 1 : -1;
+		return {
+			enter: `translateX(${side * 24}px)`,
+			exit: `translateX(${side * 14}px)`,
+		};
+	}
+	const side = OVERLAY_POSITION.startsWith("bottom") ? 1 : -1;
+	return {
+		enter: `translateY(${side * 20}px)`,
+		exit: `translateY(${side * 12}px)`,
+	};
 }
 
 // Smooth re-layout (the "FLIP" technique). `change` adds or removes overlays. Every overlay that is
 // still there is measured before and after; whatever moved is animated from its old position to
 // its new one, so nothing jumps.
 function animateReflow(change) {
-    const canAnimate = typeof Element.prototype.animate === 'function'
-        && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+	const canAnimate =
+		typeof Element.prototype.animate === "function" &&
+		!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-    const before = new Map()
-    if (canAnimate) {
-        for (const data of activeOverlays) {
-            const slot = data.slot
-            if (slot?.isConnected) before.set(slot, slot.getBoundingClientRect().top)
-        }
-    }
+	const before = new Map();
+	if (canAnimate) {
+		for (const data of activeOverlays) {
+			const slot = data.slot;
+			if (slot?.isConnected) before.set(slot, slot.getBoundingClientRect().top);
+		}
+	}
 
-    change()
-    if (!canAnimate) return
+	change();
+	if (!canAnimate) return;
 
-    for (const [slot, oldTop] of before) {
-        if (!slot.isConnected || slot.dataset.leaving) continue
-        const dy = oldTop - slot.getBoundingClientRect().top
-        if (Math.abs(dy) < 0.5) continue
-        // 'add' stacks on top of a move that is still running instead of replacing it
-        slot.animate(
-            [{ transform: `translateY(${dy}px)` }, { transform: 'translateY(0)' }],
-            { duration: OVERLAY_REFLOW_MS, easing: OVERLAY_REFLOW_EASING, composite: 'add' }
-        )
-    }
+	for (const [slot, oldTop] of before) {
+		if (!slot.isConnected || slot.dataset.leaving) continue;
+		const dy = oldTop - slot.getBoundingClientRect().top;
+		if (Math.abs(dy) < 0.5) continue;
+		// 'add' stacks on top of a move that is still running instead of replacing it
+		slot.animate(
+			[{ transform: `translateY(${dy}px)` }, { transform: "translateY(0)" }],
+			{
+				duration: OVERLAY_REFLOW_MS,
+				easing: OVERLAY_REFLOW_EASING,
+				composite: "add",
+			},
+		);
+	}
 }
 
 // Takes a slot out of the layout without moving it, so the others can close the gap while it fades.
 // It has to be pinned to the side the stack is anchored to: the container shrinks when the slot
 // leaves, and a bottom-, right- or centre-anchored container would otherwise carry it along.
 function pinInPlace(slot) {
-    const container = slot.parentElement
-    if (!container) return
-    const rect = slot.getBoundingClientRect()
-    const box = container.getBoundingClientRect()
-    const position = container.dataset.position || 'top-left'
+	const container = slot.parentElement;
+	if (!container) return;
+	const rect = slot.getBoundingClientRect();
+	const box = container.getBoundingClientRect();
+	const position = container.dataset.position || "top-left";
 
-    slot.dataset.leaving = '1'
-    slot.style.position = 'absolute'
-    slot.style.margin = '0'
-    slot.style.width = rect.width + 'px'
+	slot.dataset.leaving = "1";
+	slot.style.position = "absolute";
+	// Above the others: while they glide into the gap they would otherwise be painted over the
+	// leaving overlay and hide its exit animation (which is what you see in a top-anchored stack)
+	slot.style.zIndex = "1";
+	slot.style.margin = "0";
+	slot.style.width = rect.width + "px";
 
-    if (position.startsWith('bottom')) slot.style.bottom = (box.bottom - rect.bottom) + 'px'
-    else slot.style.top = (rect.top - box.top) + 'px'
+	if (position.startsWith("bottom"))
+		slot.style.bottom = box.bottom - rect.bottom + "px";
+	else slot.style.top = rect.top - box.top + "px";
 
-    if (position.endsWith('right')) {
-        slot.style.right = (box.right - rect.right) + 'px'
-    } else if (position.endsWith('center')) {
-        // the container stays centred however wide it is, so measure from its centre
-        slot.style.left = `calc(50% + ${rect.left - (box.left + box.width / 2)}px)`
-    } else {
-        slot.style.left = (rect.left - box.left) + 'px'
-    }
+	if (position.endsWith("right")) {
+		slot.style.right = box.right - rect.right + "px";
+	} else if (position.endsWith("center")) {
+		// the container stays centred however wide it is, so measure from its centre
+		slot.style.left = `calc(50% + ${rect.left - (box.left + box.width / 2)}px)`;
+	} else {
+		slot.style.left = rect.left - box.left + "px";
+	}
 }
 
 function removeOverlay(overlayData) {
-    if (!overlayData || !overlayData.element || overlayData.leaving) return
-    overlayData.leaving = true
-    const overlay = overlayData.element
-    const slot = overlayData.slot || overlay
+	if (!overlayData || !overlayData.element || overlayData.leaving) return;
+	overlayData.leaving = true;
+	const overlay = overlayData.element;
+	const slot = overlayData.slot || overlay;
 
-    const idx = activeOverlays.indexOf(overlayData)
-    if (idx > -1) activeOverlays.splice(idx, 1)
+	const idx = activeOverlays.indexOf(overlayData);
+	if (idx > -1) activeOverlays.splice(idx, 1);
 
-    // the others close the gap (animated) while this one fades out where it was
-    animateReflow(() => pinInPlace(slot))
+	// the others close the gap (animated) while this one fades out where it was
+	animateReflow(() => pinInPlace(slot));
 
-    overlay.style.opacity = '0'
-    overlay.style.transform = overlayMotion().exit
+	overlay.style.opacity = "0";
+	overlay.style.transform = overlayMotion().exit;
 
-    setTimeout(() => {
-        if (slot.parentNode) slot.parentNode.removeChild(slot)
-    }, OVERLAY_FADE_DURATION)
+	setTimeout(() => {
+		if (slot.parentNode) slot.parentNode.removeChild(slot);
+	}, OVERLAY_FADE_DURATION);
 }
 
-const TIMESTAMP_REGEX_SOURCE = '(\\d?\\d:)?(\\d?\\d:)\\d\\d'
+// What counts as a timestamp: the same rules (and the same code) as background/timestamps.js, which
+// decides which comments get a dot. Read off a real YouTube thread: M:SS or H:MM:SS with a 1-2 digit
+// first number and exactly 2 digits (at most 59) after it; ASCII only; never part of a longer number
+// ("1230:30", "0:050:100:15") and not followed by "%"; never inside a link. Keep the two identical.
+const TIMESTAMP_SOURCE =
+	"(?<!\\d)(?<!\\d:)(?:\\d{1,2}:[0-5]\\d:[0-5]\\d|\\d{1,2}:[0-5]\\d)(?![\\d%])(?!:\\d)";
+const TIMESTAMP_URL_SOURCE = "\\b(?:https?:\\/\\/|www\\.)\\S+";
+
+// [{ from, to }] for every timestamp in the text, in order
+function findTimestampSpans(text) {
+	const urls = [];
+	const urlPattern = new RegExp(TIMESTAMP_URL_SOURCE, "gi");
+	let match;
+	while ((match = urlPattern.exec(text)) !== null) {
+		urls.push([match.index, match.index + match[0].length]);
+	}
+
+	const spans = [];
+	const pattern = new RegExp(TIMESTAMP_SOURCE, "g");
+	while ((match = pattern.exec(text)) !== null) {
+		const from = match.index;
+		const to = from + match[0].length;
+		if (urls.some(([a, b]) => from < b && to > a)) continue;
+		spans.push({ from, to });
+	}
+	return spans;
+}
 
 // YouTube emoji (custom and Unicode) are images. The placeholder text (":_name:" or the
 // character) stays as alt text and as the fallback if the image fails to load.
 function createEmojiNode(emoji, fallbackText) {
-    if (typeof emoji.url !== 'string' || !emoji.url.startsWith('https://')) {
-        return document.createTextNode(fallbackText)
-    }
-    const img = document.createElement('img')
-    img.className = '__youtube-timestamps__emoji'
-    img.alt = fallbackText
-    img.draggable = false
-    img.addEventListener('error', () => img.replaceWith(document.createTextNode(fallbackText)))
-    img.src = emoji.url
-    return img
+	if (typeof emoji.url !== "string" || !emoji.url.startsWith("https://")) {
+		return document.createTextNode(fallbackText);
+	}
+	const img = document.createElement("img");
+	img.className = "__youtube-timestamps__emoji";
+	img.alt = fallbackText;
+	img.draggable = false;
+	img.addEventListener("error", () =>
+		img.replaceWith(document.createTextNode(fallbackText)),
+	);
+	img.src = emoji.url;
+	return img;
 }
 
 // Text nodes for text.slice(from, to), split wherever the formatting changes and wrapped
 // in bold / italic / strikethrough spans.
 function createStyledNodes(text, styles, from, to, emojis = []) {
-    const cuts = new Set([from, to])
-    for (const st of styles) {
-        if (st.start > from && st.start < to) cuts.add(st.start)
-        if (st.end > from && st.end < to) cuts.add(st.end)
-    }
-    for (const em of emojis) {
-        if (em.start > from && em.start < to) cuts.add(em.start)
-        if (em.end > from && em.end < to) cuts.add(em.end)
-    }
-    const points = [...cuts].sort((a, b) => a - b)
+	const cuts = new Set([from, to]);
+	for (const st of styles) {
+		if (st.start > from && st.start < to) cuts.add(st.start);
+		if (st.end > from && st.end < to) cuts.add(st.end);
+	}
+	for (const em of emojis) {
+		if (em.start > from && em.start < to) cuts.add(em.start);
+		if (em.end > from && em.end < to) cuts.add(em.end);
+	}
+	const points = [...cuts].sort((a, b) => a - b);
 
-    const nodes = []
-    for (let i = 0; i < points.length - 1; i++) {
-        const a = points[i]
-        const b = points[i + 1]
-        const covering = styles.filter(st => st.start <= a && st.end >= b)
-        const emoji = emojis.find(em => em.start === a && em.end === b)
-        let node = emoji ? createEmojiNode(emoji, text.slice(a, b)) : document.createTextNode(text.slice(a, b))
-        const wrap = (cls) => {
-            const span = document.createElement('span')
-            span.className = cls
-            span.appendChild(node)
-            node = span
-        }
-        if (covering.some(st => st.strikethrough)) wrap('__youtube-timestamps__fmt-strike')
-        if (covering.some(st => st.italic)) wrap('__youtube-timestamps__fmt-italic')
-        if (covering.some(st => st.bold)) wrap('__youtube-timestamps__fmt-bold')
-        nodes.push(node)
-    }
-    return nodes
+	const nodes = [];
+	for (let i = 0; i < points.length - 1; i++) {
+		const a = points[i];
+		const b = points[i + 1];
+		const covering = styles.filter((st) => st.start <= a && st.end >= b);
+		const emoji = emojis.find((em) => em.start === a && em.end === b);
+		let node = emoji
+			? createEmojiNode(emoji, text.slice(a, b))
+			: document.createTextNode(text.slice(a, b));
+		const wrap = (cls) => {
+			const span = document.createElement("span");
+			span.className = cls;
+			span.appendChild(node);
+			node = span;
+		};
+		if (covering.some((st) => st.strikethrough))
+			wrap("__youtube-timestamps__fmt-strike");
+		if (covering.some((st) => st.italic))
+			wrap("__youtube-timestamps__fmt-italic");
+		if (covering.some((st) => st.bold)) wrap("__youtube-timestamps__fmt-bold");
+		nodes.push(node);
+	}
+	return nodes;
 }
 
 // Builds the comment text as a fragment with formatting applied. Every timestamp in the
 // text is passed to createStamp(ts); if it returns an element, the (styled) timestamp
 // text goes inside it, otherwise it is rendered as ordinary text.
 function createStyledFragment(text, styles, createStamp, emojis) {
-    const frag = document.createDocumentFragment()
-    if (!text) return frag
-    styles = Array.isArray(styles) ? styles : []
-    emojis = Array.isArray(emojis) ? emojis : []
+	const frag = document.createDocumentFragment();
+	if (!text) return frag;
+	styles = Array.isArray(styles) ? styles : [];
+	emojis = Array.isArray(emojis) ? emojis : [];
 
-    const regex = new RegExp(TIMESTAMP_REGEX_SOURCE, 'g')
-    let lastIndex = 0
-    let match
-    while ((match = regex.exec(text)) !== null) {
-        const from = match.index
-        const to = regex.lastIndex
-        for (const node of createStyledNodes(text, styles, lastIndex, from, emojis)) frag.appendChild(node)
+	let lastIndex = 0;
+	for (const { from, to } of findTimestampSpans(text)) {
+		for (const node of createStyledNodes(text, styles, lastIndex, from, emojis))
+			frag.appendChild(node);
 
-        const stamp = createStamp ? createStamp(text.slice(from, to)) : null
-        const nodes = createStyledNodes(text, styles, from, to, emojis)
-        if (stamp) {
-            for (const node of nodes) stamp.appendChild(node)
-            frag.appendChild(stamp)
-        } else {
-            for (const node of nodes) frag.appendChild(node)
-        }
-        lastIndex = to
-    }
-    for (const node of createStyledNodes(text, styles, lastIndex, text.length, emojis)) frag.appendChild(node)
-    return frag
+		const stamp = createStamp ? createStamp(text.slice(from, to)) : null;
+		const nodes = createStyledNodes(text, styles, from, to, emojis);
+		if (stamp) {
+			for (const node of nodes) stamp.appendChild(node);
+			frag.appendChild(stamp);
+		} else {
+			for (const node of nodes) frag.appendChild(node);
+		}
+		lastIndex = to;
+	}
+	for (const node of createStyledNodes(
+		text,
+		styles,
+		lastIndex,
+		text.length,
+		emojis,
+	))
+		frag.appendChild(node);
+	return frag;
 }
 
 // Makes a timestamp written in a comment seek the video when clicked (or activated with the keyboard)
 function makeTimestampSeekable(span, ts) {
-    span.setAttribute('role', 'button')
-    span.tabIndex = 0
-    span.addEventListener('click', (ev) => {
-        ev.stopPropagation()
-        const secs = parseTimestampToSeconds(ts)
-        const video = getVideo && getVideo()
-        if (video && secs != null) {
-            video.currentTime = Math.max(0, Math.min(video.duration || Infinity, secs))
-            video.play().catch(()=>{})
-        }
-    })
-    span.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter' || ev.key === ' ') {
-            ev.preventDefault()
-            span.click()
-        }
-    })
+	span.setAttribute("role", "button");
+	span.tabIndex = 0;
+	span.addEventListener("click", (ev) => {
+		ev.stopPropagation();
+		const secs = parseTimestampToSeconds(ts);
+		const video = getVideo && getVideo();
+		if (video && secs != null) {
+			video.currentTime = Math.max(
+				0,
+				Math.min(video.duration || Infinity, secs),
+			);
+			video.play().catch(() => {});
+		}
+	});
+	span.addEventListener("keydown", (ev) => {
+		if (ev.key === "Enter" || ev.key === " ") {
+			ev.preventDefault();
+			span.click();
+		}
+	});
 }
 
 // The timestamp this overlay is showing gets the full highlight (accent text, background and
 // border). Any other timestamp in the same comment gets the accent text colour only. Both seek.
-function formatCommentTextWithTimestampSpans(text, activeTimestamp, styles, emojis) {
-    return createStyledFragment(text, styles, (ts) => {
-        const isActive = !!activeTimestamp && ts === activeTimestamp
-        if (!isActive && parseTimestampToSeconds(ts) == null) return null   // not a real timestamp (e.g. 1:99)
+function formatCommentTextWithTimestampSpans(
+	text,
+	activeTimestamp,
+	styles,
+	emojis,
+) {
+	return createStyledFragment(
+		text,
+		styles,
+		(ts) => {
+			const isActive = !!activeTimestamp && ts === activeTimestamp;
+			if (!isActive && parseTimestampToSeconds(ts) == null) return null; // not a real timestamp (e.g. 1:99)
 
-        const span = document.createElement('span')
-        span.className = isActive
-            ? '__youtube-timestamps__live-overlay__text-stamp'
-            : '__youtube-timestamps__live-overlay__text-link'
-        makeTimestampSeekable(span, ts)
-        return span
-    }, emojis)
+			const span = document.createElement("span");
+			span.className = isActive
+				? "__youtube-timestamps__live-overlay__text-stamp"
+				: "__youtube-timestamps__live-overlay__text-link";
+			makeTimestampSeekable(span, ts);
+			return span;
+		},
+		emojis,
+	);
 }
 
 function parseTimestampToSeconds(ts) {
-    if (!ts || typeof ts !== 'string') return null
-    const parts = ts.split(':').map(p => parseInt(p, 10))
-    if (parts.some(p => Number.isNaN(p))) return null
-    if (parts.length === 1) return parts[0]
-    if (parts.length === 2) {
-        const [m, s] = parts
-        if (s > 59) return null
-        return m * 60 + s
-    }
-    const last3 = parts.slice(-3)
-    const [h, m, s] = last3
-    if (s > 59 || m > 59) return null
-    return h * 3600 + m * 60 + s
+	if (!ts || typeof ts !== "string") return null;
+	const parts = ts.split(":").map((p) => parseInt(p, 10));
+	if (parts.some((p) => Number.isNaN(p))) return null;
+	if (parts.length === 1) return parts[0];
+	if (parts.length === 2) {
+		const [m, s] = parts;
+		if (s > 59) return null;
+		return m * 60 + s;
+	}
+	const last3 = parts.slice(-3);
+	const [h, m, s] = last3;
+	if (s > 59 || m > 59) return null;
+	return h * 3600 + m * 60 + s;
 }
 
 // Fills `el` with the author's name (handle, display name or both, depending on the option),
 // followed by badges if enabled. `displayName` only exists when the background looked it up.
 function fillAuthorName(el, timeComment) {
-    el.textContent = ''
-    const handle = timeComment.authorName || ''
-    const display = timeComment.displayName || ''
+	el.textContent = "";
+	const handle = timeComment.authorName || "";
+	const display = timeComment.displayName || "";
 
-    let main = handle || 'Unknown'
-    let secondary = ''
-    if (AUTHOR_NAME_MODE !== 'handle' && display) {
-        main = display
-        if (AUTHOR_NAME_MODE === 'both' && handle && handle !== display) secondary = handle
-    }
+	let main = handle || "Unknown";
+	let secondary = "";
+	if (AUTHOR_NAME_MODE !== "handle" && display) {
+		main = display;
+		if (AUTHOR_NAME_MODE === "both" && handle && handle !== display)
+			secondary = handle;
+	}
 
-    el.appendChild(document.createTextNode(main))
-    if (secondary) {
-        const handleEl = document.createElement('span')
-        handleEl.className = '__youtube-timestamps__handle'
-        handleEl.textContent = ' ' + secondary
-        el.appendChild(handleEl)
-    }
+	el.appendChild(document.createTextNode(main));
+	if (secondary) {
+		const handleEl = document.createElement("span");
+		handleEl.className = "__youtube-timestamps__handle";
+		handleEl.textContent = " " + secondary;
+		el.appendChild(handleEl);
+	}
 
-    if (SHOW_BADGES) {
-        if (timeComment.verified) {
-            const badge = document.createElement('span')
-            badge.className = '__youtube-timestamps__badge __youtube-timestamps__badge--verified'
-            badge.title = 'Verified'
-            badge.dataset.glyph = '✓'    // drawn by CSS so it can take the card's background colour
-            el.appendChild(badge)
-        }
-        if (timeComment.artist) {
-            const badge = document.createElement('span')
-            badge.className = '__youtube-timestamps__badge __youtube-timestamps__badge--artist'
-            badge.title = 'Official Artist Channel'
-            badge.dataset.glyph = '♪'
-            el.appendChild(badge)
-        }
-        if (timeComment.creator) {
-            const badge = document.createElement('span')
-            badge.className = '__youtube-timestamps__badge __youtube-timestamps__badge--creator'
-            badge.title = 'Channel owner'
-            badge.textContent = 'Creator'
-            el.appendChild(badge)
-        }
-        // Membership badge: the channel's own badge image
-        if (typeof timeComment.memberBadgeUrl === 'string' && timeComment.memberBadgeUrl.startsWith('https://')) {
-            const img = document.createElement('img')
-            img.className = '__youtube-timestamps__badge-member'
-            img.alt = timeComment.memberBadgeLabel || 'Member'
-            img.title = timeComment.memberBadgeLabel || 'Member'
-            img.draggable = false
-            img.addEventListener('error', () => img.remove())
-            img.src = timeComment.memberBadgeUrl
-            el.appendChild(img)
-        }
-    }
+	if (SHOW_BADGES) {
+		if (timeComment.verified) {
+			const badge = document.createElement("span");
+			badge.className =
+				"__youtube-timestamps__badge __youtube-timestamps__badge--verified";
+			badge.title = "Verified";
+			badge.dataset.glyph = "✓"; // drawn by CSS so it can take the card's background colour
+			el.appendChild(badge);
+		}
+		if (timeComment.artist) {
+			const badge = document.createElement("span");
+			badge.className =
+				"__youtube-timestamps__badge __youtube-timestamps__badge--artist";
+			badge.title = "Official Artist Channel";
+			badge.dataset.glyph = "♪";
+			el.appendChild(badge);
+		}
+		if (timeComment.creator) {
+			const badge = document.createElement("span");
+			badge.className =
+				"__youtube-timestamps__badge __youtube-timestamps__badge--creator";
+			badge.title = "Channel owner";
+			badge.textContent = "Creator";
+			el.appendChild(badge);
+		}
+		// Membership badge: the channel's own badge image
+		if (
+			typeof timeComment.memberBadgeUrl === "string" &&
+			timeComment.memberBadgeUrl.startsWith("https://")
+		) {
+			const img = document.createElement("img");
+			img.className = "__youtube-timestamps__badge-member";
+			img.alt = timeComment.memberBadgeLabel || "Member";
+			img.title = timeComment.memberBadgeLabel || "Member";
+			img.draggable = false;
+			img.addEventListener("error", () => img.remove());
+			img.src = timeComment.memberBadgeUrl;
+			el.appendChild(img);
+		}
+	}
 }
 
-// "188K likes · 961 replies · 10 months ago", limited to what is enabled and available
+// "188K likes • 961 replies • 10 months ago", limited to what is enabled and available
 function buildMetaText(timeComment) {
-    const parts = []
-    if (SHOW_LIKES && timeComment.likes) {
-        parts.push(`${timeComment.likes} ${timeComment.likes === '1' ? 'like' : 'likes'}`)
-    }
-    if (SHOW_REPLIES && timeComment.replies) {
-        parts.push(`${timeComment.replies} ${timeComment.replies === '1' ? 'reply' : 'replies'}`)
-    }
-    if (SHOW_PUBLISHED && timeComment.published) parts.push(timeComment.published)
-    return parts.join(' · ')
+	const parts = [];
+	if (SHOW_LIKES && timeComment.likes) {
+		parts.push(
+			`${timeComment.likes} ${timeComment.likes === "1" ? "like" : "likes"}`,
+		);
+	}
+	if (SHOW_REPLIES && timeComment.replies) {
+		parts.push(
+			`${timeComment.replies} ${timeComment.replies === "1" ? "reply" : "replies"}`,
+		);
+	}
+	if (SHOW_PUBLISHED && timeComment.published)
+		parts.push(timeComment.published);
+	return parts.join(" • ");
 }
 
 function createOverlayElement(timeComment) {
-    const overlay = document.createElement('div')
-    overlay.className = '__youtube-timestamps__live-overlay'
+	const overlay = document.createElement("div");
+	overlay.className = "__youtube-timestamps__live-overlay";
 
-    const avatar = document.createElement('img')
-    avatar.className = '__youtube-timestamps__live-overlay__avatar'
-    avatar.alt = timeComment.authorName || 'User'
-    avatar.src = timeComment.authorAvatar || ''
+	const avatar = document.createElement("img");
+	avatar.className = "__youtube-timestamps__live-overlay__avatar";
+	avatar.alt = timeComment.authorName || "User";
+	avatar.src = timeComment.authorAvatar || "";
 
-    const content = document.createElement('div')
-    content.className = '__youtube-timestamps__live-overlay__content'
+	const content = document.createElement("div");
+	content.className = "__youtube-timestamps__live-overlay__content";
 
-    const authorName = document.createElement('div')
-    authorName.className = '__youtube-timestamps__live-overlay__author'
-    fillAuthorName(authorName, timeComment)
+	const authorName = document.createElement("div");
+	authorName.className = "__youtube-timestamps__live-overlay__author";
+	fillAuthorName(authorName, timeComment);
 
-    const metaText = buildMetaText(timeComment)
-    let meta = null
-    if (metaText) {
-        meta = document.createElement('div')
-        meta.className = '__youtube-timestamps__live-overlay__meta'
-        meta.textContent = metaText
-    }
+	const metaText = buildMetaText(timeComment);
+	let meta = null;
+	if (metaText) {
+		meta = document.createElement("div");
+		meta.className = "__youtube-timestamps__live-overlay__meta";
+		meta.textContent = metaText;
+	}
 
-    const commentText = document.createElement('div')
-    commentText.className = '__youtube-timestamps__live-overlay__text'
-    commentText.appendChild(formatCommentTextWithTimestampSpans(timeComment.text || '', timeComment.timestamp, timeComment.styles, timeComment.emojis))
+	const commentText = document.createElement("div");
+	commentText.className = "__youtube-timestamps__live-overlay__text";
+	commentText.appendChild(
+		formatCommentTextWithTimestampSpans(
+			timeComment.text || "",
+			timeComment.timestamp,
+			timeComment.styles,
+			timeComment.emojis,
+		),
+	);
 
-    const scrollShadow = document.createElement('div')
-    scrollShadow.className = '__youtube-timestamps__live-overlay__text-scroll-shadow'
-    scrollShadow.style.opacity = '0'
+	const scrollShadow = document.createElement("div");
+	scrollShadow.className =
+		"__youtube-timestamps__live-overlay__text-scroll-shadow";
+	scrollShadow.style.opacity = "0";
 
-    const updateShadow = () => {
-        const isScrollable = commentText.scrollHeight > commentText.clientHeight + 2
-        const atBottom = commentText.scrollTop + commentText.clientHeight >= commentText.scrollHeight - 2
-        scrollShadow.style.opacity = (isScrollable && !atBottom) ? '1' : '0'
-    }
+	const updateShadow = () => {
+		const isScrollable =
+			commentText.scrollHeight > commentText.clientHeight + 2;
+		const atBottom =
+			commentText.scrollTop + commentText.clientHeight >=
+			commentText.scrollHeight - 2;
+		scrollShadow.style.opacity = isScrollable && !atBottom ? "1" : "0";
+	};
 
-    commentText.addEventListener('scroll', updateShadow)
-    requestAnimationFrame(() => requestAnimationFrame(updateShadow))
+	commentText.addEventListener("scroll", updateShadow);
+	requestAnimationFrame(() => requestAnimationFrame(updateShadow));
 
-    content.appendChild(authorName)
-    if (meta) content.appendChild(meta)
-    content.appendChild(commentText)
-    commentText.appendChild(scrollShadow)
+	content.appendChild(authorName);
+	if (meta) content.appendChild(meta);
+	content.appendChild(commentText);
+	commentText.appendChild(scrollShadow);
 
-    overlay.appendChild(avatar)
-    overlay.appendChild(content)
+	overlay.appendChild(avatar);
+	overlay.appendChild(content);
 
-    commentText.addEventListener('wheel', (e) => {
-        const atTop = commentText.scrollTop <= 0
-        const atBottom = (commentText.scrollTop + commentText.clientHeight) >= (commentText.scrollHeight - 1)
-        if (commentText.scrollHeight > commentText.clientHeight) {
-            if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atBottom)) {
-                e.stopPropagation()
-                e.preventDefault()
-                commentText.scrollBy({ top: e.deltaY, behavior: 'auto' })
-            }
-        }
-    }, { passive: false })
+	commentText.addEventListener(
+		"wheel",
+		(e) => {
+			const atTop = commentText.scrollTop <= 0;
+			const atBottom =
+				commentText.scrollTop + commentText.clientHeight >=
+				commentText.scrollHeight - 1;
+			if (commentText.scrollHeight > commentText.clientHeight) {
+				if ((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atBottom)) {
+					e.stopPropagation();
+					e.preventDefault();
+					commentText.scrollBy({ top: e.deltaY, behavior: "auto" });
+				}
+			}
+		},
+		{ passive: false },
+	);
 
-    overlay.addEventListener('auxclick', (e) => {
-        if (e.button === 1) {
-            e.preventDefault()
-            const videoId = activeVideoId || getVideoId()
-            const commentId = timeComment.commentId
-            if (videoId && commentId) {
-                window.open(`https://www.youtube.com/watch?v=${videoId}&lc=${commentId}`, '_blank')
-            }
-        }
-    })
+	overlay.addEventListener("auxclick", (e) => {
+		if (e.button === 1) {
+			e.preventDefault();
+			const videoId = activeVideoId || getVideoId();
+			const commentId = timeComment.commentId;
+			if (videoId && commentId) {
+				window.open(
+					`https://www.youtube.com/watch?v=${videoId}&lc=${commentId}`,
+					"_blank",
+				);
+			}
+		}
+	});
 
-    return overlay
+	return overlay;
 }
 
 function getOrCreateOverlayContainer() {
-    const player = getPlayer()
+	const player = getPlayer();
 
-    // YouTube can move or rebuild the player; a container left behind is invisible
-    if (overlayContainer && (!overlayContainer.isConnected || (player && !player.contains(overlayContainer)))) {
-        removeOverlayContainer()
-    }
+	// YouTube can move or rebuild the player; a container left behind is invisible
+	if (
+		overlayContainer &&
+		(!overlayContainer.isConnected ||
+			(player && !player.contains(overlayContainer)))
+	) {
+		removeOverlayContainer();
+	}
 
-    if (!overlayContainer) {
-        const container = document.createElement('div')
-        container.classList.add('__youtube-timestamps__overlay-container')
-        container.dataset.position = OVERLAY_POSITION
-        container.dataset.width = OVERLAY_WIDTH_FIT ? 'fit' : 'uniform'
-        setOverlayVars(container)
-        container.style.setProperty('--yt-overlay-enter', overlayMotion().enter)
+	if (!overlayContainer) {
+		const container = document.createElement("div");
+		container.classList.add("__youtube-timestamps__overlay-container");
+		container.dataset.position = OVERLAY_POSITION;
+		container.dataset.width = OVERLAY_WIDTH_FIT ? "fit" : "uniform";
+		setOverlayVars(container);
+		container.style.setProperty("--yt-overlay-enter", overlayMotion().enter);
 
-        if (!player) return container   // nowhere to attach yet: don't cache it
-        player.appendChild(container)
-        overlayContainer = container
-    }
-    return overlayContainer
+		if (!player) return container; // nowhere to attach yet: don't cache it
+		player.appendChild(container);
+		overlayContainer = container;
+	}
+	return overlayContainer;
 }
 
 function removeOverlayContainer() {
-    if (overlayContainer) {
-        overlayContainer.remove()
-        overlayContainer = null
-    }
-    activeOverlays = []
+	if (overlayContainer) {
+		overlayContainer.remove();
+		overlayContainer = null;
+	}
+	activeOverlays = [];
 }
 
 function waitForSelector(selector, timeoutMs = 5000) {
-    return new Promise((resolve, reject) => {
-        const el = document.querySelector(selector)
-        if (el) return resolve(el)
+	return new Promise((resolve, reject) => {
+		const el = document.querySelector(selector);
+		if (el) return resolve(el);
 
-        const observer = new MutationObserver(() => {
-            const found = document.querySelector(selector)
-            if (found) {
-                observer.disconnect()
-                resolve(found)
-            }
-        })
-        observer.observe(document.documentElement, { childList: true, subtree: true })
+		const observer = new MutationObserver(() => {
+			const found = document.querySelector(selector);
+			if (found) {
+				observer.disconnect();
+				resolve(found);
+			}
+		});
+		observer.observe(document.documentElement, {
+			childList: true,
+			subtree: true,
+		});
 
-        setTimeout(() => {
-            observer.disconnect()
-            reject(new Error(`Timeout waiting for ${selector}`))
-        }, timeoutMs)
-    })
+		setTimeout(() => {
+			observer.disconnect();
+			reject(new Error(`Timeout waiting for ${selector}`));
+		}, timeoutMs);
+	});
 }
 
 function addTimeComments(comments, token = loadToken) {
-    if (token !== loadToken) return   // belongs to a video we have already left
+	if (token !== loadToken) return; // belongs to a video we have already left
 
-    const video = getVideo()
-    if (!video) {
-        waitForSelector('#movie_player video', 2000)
-            .then(() => addTimeComments(comments, token))
-            .catch(() => {})
-        return
-    }
+	const video = getVideo();
+	if (!video) {
+		waitForSelector("#movie_player video", 2000)
+			.then(() => addTimeComments(comments, token))
+			.catch(() => {});
+		return;
+	}
 
-    const duration = typeof video.duration === 'number' && isFinite(video.duration) ? video.duration : NaN
-    if (!duration || Number.isNaN(duration) || duration <= 0) {
-        // Wait for metadata, keeping at most one such listener around
-        if (pendingMeta) pendingMeta.video.removeEventListener('loadedmetadata', pendingMeta.handler)
-        const handler = () => {
-            video.removeEventListener('loadedmetadata', handler)
-            if (pendingMeta?.handler === handler) pendingMeta = null
-            addTimeComments(comments, token)
-        }
-        pendingMeta = { video, handler }
-        video.addEventListener('loadedmetadata', handler)
-        return
-    }
+	const duration =
+		typeof video.duration === "number" && isFinite(video.duration)
+			? video.duration
+			: NaN;
+	if (!duration || Number.isNaN(duration) || duration <= 0) {
+		// Wait for metadata, keeping at most one such listener around
+		if (pendingMeta)
+			pendingMeta.video.removeEventListener(
+				"loadedmetadata",
+				pendingMeta.handler,
+			);
+		const handler = () => {
+			video.removeEventListener("loadedmetadata", handler);
+			if (pendingMeta?.handler === handler) pendingMeta = null;
+			addTimeComments(comments, token);
+		};
+		pendingMeta = { video, handler };
+		video.addEventListener("loadedmetadata", handler);
+		return;
+	}
 
-    const bar = getOrCreateBar()
-    if (!bar) return
-    bar.replaceChildren()   // rebuilding must never stack a second set of stamps
-    stampEntries = []
-    hidePreview()
+	const dots = getOrCreateDots();
+	if (!dots) return;
+	dots.replaceChildren(); // rebuilding must never stack a second set of dots
+	dotEntries = [];
+	hidePreview();
 
-    const groupedComments = new Map()
-    for (const tc of comments) {
-        if (typeof tc.time !== 'number' || tc.time > duration) continue
-        const timeKey = tc.time.toString()
-        if (!groupedComments.has(timeKey)) groupedComments.set(timeKey, [])
-        groupedComments.get(timeKey).push(tc)
-    }
+	const groupedComments = new Map();
+	for (const tc of comments) {
+		if (typeof tc.time !== "number" || tc.time > duration) continue;
+		const timeKey = tc.time.toString();
+		if (!groupedComments.has(timeKey)) groupedComments.set(timeKey, []);
+		groupedComments.get(timeKey).push(tc);
+	}
 
-    for (const [timeKey, commentsAtTime] of groupedComments) {
-        const time = parseFloat(timeKey)
-        const stamp = createTimestampStamp(time, duration, commentsAtTime)
-        bar.appendChild(stamp)
-    }
+	for (const [timeKey, commentsAtTime] of groupedComments) {
+		const time = parseFloat(timeKey);
+		const dot = createTimestampDot(time, duration, commentsAtTime);
+		dots.appendChild(dot);
+	}
 
-    layoutBar(bar)
-    hookPlayer(getPlayer())
-    observePlayer(getPlayer())
+	layoutDots(dots);
+	hookPlayer(getPlayer());
+	observePlayer(getPlayer());
 
-    builtDuration = duration
-    const beyond = comments.filter(tc => typeof tc.time === 'number' && tc.time > duration).length
-    if (beyond) log(beyond, 'timestamps are later than the video length and were skipped')
-    const r = bar.getBoundingClientRect()
-    log('built', stampEntries.length, 'ticks for a', Math.round(duration), 's video; layer at',
-        [r.left, r.top, r.width, r.height].map(Math.round).join(','))
+	builtDuration = duration;
+	const beyond = comments.filter(
+		(tc) => typeof tc.time === "number" && tc.time > duration,
+	).length;
+	if (beyond)
+		log(beyond, "timestamps are later than the video length and were skipped");
+	const r = dots.getBoundingClientRect();
+	log(
+		"built",
+		dotEntries.length,
+		"dots for a",
+		Math.round(duration),
+		"s video; layer at",
+		[r.left, r.top, r.width, r.height].map(Math.round).join(","),
+	);
 }
 
-// A tick is purely visual (pointer-events: none), so it can never get in the way of YouTube's
+// A dot is purely visual (pointer-events: none), so it can never get in the way of YouTube's
 // own progress bar. Hovering is worked out from the cursor position, see findEntryAt().
-function createTimestampStamp(time, videoDuration, commentsAtTime) {
-    const stamp = document.createElement('div')
-    stamp.classList.add('__youtube-timestamps__stamp')
+function createTimestampDot(time, videoDuration, commentsAtTime) {
+	const dot = document.createElement("div");
+	dot.classList.add("__youtube-timestamps__dot");
 
-    if (commentsAtTime.length > 1) {
-        stamp.classList.add('__youtube-timestamps__stamp--multiple')
-    }
+	if (commentsAtTime.length > 1) {
+		dot.classList.add("__youtube-timestamps__dot--multiple");
+	}
 
-    const fraction = time / videoDuration
-    stamp.style.left = `calc(${fraction * 100}% - 2px)`
+	const fraction = time / videoDuration;
+	dot.style.left = `${fraction * 100}%`; // the CSS centres the circle on this point
 
-    stampEntries.push({ el: stamp, fraction, commentsAtTime, index: 0 })
-    return stamp
+	dotEntries.push({ el: dot, fraction, time, commentsAtTime, index: 0 });
+	return dot;
 }
 
-// The tick closest to the cursor, if the cursor is on (or just around) the progress bar.
+// The dot closest to the cursor, if the cursor is on (or just around) the progress bar.
 function findEntryAt(clientX, clientY) {
-    const bar = document.querySelector('.__youtube-timestamps__bar')
-    if (!bar || stampEntries.length === 0) return null
+	const dots = document.querySelector(".__youtube-timestamps__dots");
+	if (!dots || dotEntries.length === 0) return null;
 
-    const rect = bar.getBoundingClientRect()
-    if (!(rect.width > 0)) return null
-    if (clientY < rect.top - HIT_BAND_ABOVE_PX || clientY > rect.bottom + HIT_BAND_BELOW_PX) return null
+	const rect = dots.getBoundingClientRect();
+	if (!(rect.width > 0)) return null;
+	if (
+		clientY < rect.top - HIT_BAND_ABOVE_PX ||
+		clientY > rect.bottom + HIT_BAND_BELOW_PX
+	)
+		return null;
 
-    let best = null
-    let bestDistance = HIT_RADIUS_PX
-    for (const entry of stampEntries) {
-        const distance = Math.abs(clientX - (rect.left + entry.fraction * rect.width))
-        if (distance <= bestDistance) {
-            best = entry
-            bestDistance = distance
-        }
-    }
-    return best
+	let best = null;
+	let bestDistance = HIT_RADIUS_PX;
+	for (const entry of dotEntries) {
+		const distance = Math.abs(
+			clientX - (rect.left + entry.fraction * rect.width),
+		);
+		if (distance <= bestDistance) {
+			best = entry;
+			bestDistance = distance;
+		}
+	}
+	return best;
 }
 
 function setHoveredEntry(entry) {
-    if (entry === hoveredEntry) return
-    if (!entry) {
-        hidePreview()
-        return
-    }
+	if (entry === hoveredEntry) return;
+	if (!entry) {
+		hidePreview();
+		return;
+	}
 
-    hoveredEntry?.el.classList.remove('__youtube-timestamps__stamp--hover')
-    hoveredEntry = entry
-    hoveredStamp = entry.el
-    entry.el.classList.add('__youtube-timestamps__stamp--hover')
-    showPreview(entry.commentsAtTime[entry.index], entry.commentsAtTime.length, entry.index)
+	hoveredEntry?.el.classList.remove("__youtube-timestamps__dot--hover");
+	hoveredEntry = entry;
+	hoveredDot = entry.el;
+	entry.el.classList.add("__youtube-timestamps__dot--hover");
+	showPreview(
+		entry.commentsAtTime[entry.index],
+		entry.commentsAtTime.length,
+		entry.index,
+	);
+}
+
+// Is the cursor on (or just around) the progress bar? Same zone as the hover detection below.
+function isCursorNearDots(dots, clientX, clientY) {
+	if (!dots) return false;
+	const rect = dots.getBoundingClientRect();
+	if (!(rect.width > 0)) return false;
+	return (
+		clientX >= rect.left - HIT_RADIUS_PX &&
+		clientX <= rect.right + HIT_RADIUS_PX &&
+		clientY >= rect.top - HIT_BAND_ABOVE_PX &&
+		clientY <= rect.bottom + HIT_BAND_BELOW_PX
+	);
+}
+
+// While the cursor is on the bar every dot grows and turns pure white (the CSS does the rest)
+function setDotsNear(near) {
+	document
+		.querySelector(".__youtube-timestamps__dots")
+		?.classList.toggle("__youtube-timestamps__dots--near", near);
 }
 
 function onPlayerMouseMove(event) {
-    if (!commentsReady || !getVideoId()) return
-    const entry = findEntryAt(event.clientX, event.clientY)
-    if (DEBUG && !entry) logHoverMiss(event)
-    setHoveredEntry(entry)
+	if (!commentsReady || !getVideoId()) return;
+	setDotsNear(
+		isCursorNearDots(
+			document.querySelector(".__youtube-timestamps__dots"),
+			event.clientX,
+			event.clientY,
+		),
+	);
+	const entry = findEntryAt(event.clientX, event.clientY);
+	if (DEBUG && !entry) logHoverMiss(event);
+	setHoveredEntry(entry);
 }
 
-// Debug only: when the cursor is on the progress bar but no tick is hit, say where everything is
+// Debug only: when the cursor is on the progress bar but no dot is hit, say where everything is
 function logHoverMiss(event) {
-    const now = Date.now()
-    if (now - lastHoverLog < 1500) return
-    const bar = document.querySelector('.__youtube-timestamps__bar')
-    const rect = bar?.getBoundingClientRect()
-    if (!rect || Math.abs(event.clientY - (rect.top + rect.height / 2)) > 40) return
-    lastHoverLog = now
-    log('cursor near the progress bar but not on a tick', JSON.stringify({
-        cursor: [event.clientX, event.clientY],
-        layer: [rect.left, rect.top, rect.width, rect.height].map(Math.round),
-        display: bar.style.display || 'shown',
-        tickX: stampEntries.map(e => Math.round(rect.left + e.fraction * rect.width))
-    }))
+	const now = Date.now();
+	if (now - lastHoverLog < 1500) return;
+	const dots = document.querySelector(".__youtube-timestamps__dots");
+	const rect = dots?.getBoundingClientRect();
+	if (!rect || Math.abs(event.clientY - (rect.top + rect.height / 2)) > 40)
+		return;
+	lastHoverLog = now;
+	log(
+		"cursor near the progress bar but not on a dot",
+		JSON.stringify({
+			cursor: [event.clientX, event.clientY],
+			layer: [rect.left, rect.top, rect.width, rect.height].map(Math.round),
+			display: dots.style.display || "shown",
+			dotX: dotEntries.map((e) =>
+				Math.round(rect.left + e.fraction * rect.width),
+			),
+		}),
+	);
 }
 
 function onPlayerMouseLeave() {
-    setHoveredEntry(null)
+	setDotsNear(false);
+	setHoveredEntry(null);
 }
 
 function onPlayerAuxClick(event) {
-    if (event.button !== 1 || !hoveredEntry) return
-    event.preventDefault()
-    event.stopPropagation()
-    openCommentInNewTab(hoveredEntry.commentsAtTime[hoveredEntry.index])
+	if (event.button !== 1 || !hoveredEntry) return;
+	event.preventDefault();
+	event.stopPropagation();
+	openCommentInNewTab(hoveredEntry.commentsAtTime[hoveredEntry.index]);
 }
 
 const throttledWheel = withWheelThrottle((deltaY) => {
-    const entry = hoveredEntry
-    if (!entry) return
-    handleWheelNavigation(deltaY, entry.commentsAtTime, entry.index, (newIndex) => {
-        entry.index = newIndex
-    })
-})
+	const entry = hoveredEntry;
+	if (!entry) return;
+	handleWheelNavigation(
+		deltaY,
+		entry.commentsAtTime,
+		entry.index,
+		(newIndex) => {
+			entry.index = newIndex;
+		},
+	);
+});
 
 function onPlayerWheel(event) {
-    if (!hoveredEntry) return
-    throttledWheel(event)
+	if (!hoveredEntry) return;
+	throttledWheel(event);
 }
 
 function hookPlayer(player) {
-    if (!player || hookedPlayers.has(player)) return
-    hookedPlayers.add(player)
-    player.addEventListener('mousemove', onPlayerMouseMove, true)
-    player.addEventListener('mouseleave', onPlayerMouseLeave)
-    player.addEventListener('wheel', onPlayerWheel, { capture: true, passive: false })
-    player.addEventListener('auxclick', onPlayerAuxClick, true)
-    log('hooked player mouse handling')
+	if (!player || hookedPlayers.has(player)) return;
+	hookedPlayers.add(player);
+	player.addEventListener("mousemove", onPlayerMouseMove, true);
+	player.addEventListener("mouseleave", onPlayerMouseLeave);
+	player.addEventListener("wheel", onPlayerWheel, {
+		capture: true,
+		passive: false,
+	});
+	player.addEventListener("auxclick", onPlayerAuxClick, true);
+	log("hooked player mouse handling");
 }
 
-function handleWheelNavigation(deltaY, commentsAtTime, currentIndex, updateIndex) {
-    const SWITCH_THRESHOLD = WHEEL_SWITCH_THRESHOLD
-    const preview = getOrCreatePreview()
-    const textElement = preview.querySelector('.__youtube-timestamps__preview__text')
+function handleWheelNavigation(
+	deltaY,
+	commentsAtTime,
+	currentIndex,
+	updateIndex,
+) {
+	const SWITCH_THRESHOLD = WHEEL_SWITCH_THRESHOLD;
+	const preview = getOrCreatePreview();
+	const textElement = preview.querySelector(
+		".__youtube-timestamps__preview__text",
+	);
 
-    if (!preview || preview.style.display === 'none') {
-        showPreview(commentsAtTime[currentIndex], commentsAtTime.length, currentIndex)
-        return
-    }
+	if (!preview || preview.style.display === "none") {
+		showPreview(
+			commentsAtTime[currentIndex],
+			commentsAtTime.length,
+			currentIndex,
+		);
+		return;
+	}
 
-    const switchTo = (newIndex) => {
-        updateIndex(newIndex)
-        showPreview(commentsAtTime[newIndex], commentsAtTime.length, newIndex)
-        const newText = document.querySelector('.__youtube-timestamps__preview__text')
-        if (newText) newText.scrollTop = 0
-    }
+	const switchTo = (newIndex) => {
+		updateIndex(newIndex);
+		showPreview(commentsAtTime[newIndex], commentsAtTime.length, newIndex);
+		const newText = document.querySelector(
+			".__youtube-timestamps__preview__text",
+		);
+		if (newText) newText.scrollTop = 0;
+	};
 
-    if (textElement && textElement.scrollHeight > textElement.clientHeight) {
-        const atTop = textElement.scrollTop <= SCROLL_TOLERANCE
-        const atBottom = (textElement.scrollTop + textElement.clientHeight) >= (textElement.scrollHeight - SCROLL_TOLERANCE)
+	if (textElement && textElement.scrollHeight > textElement.clientHeight) {
+		const atTop = textElement.scrollTop <= SCROLL_TOLERANCE;
+		const atBottom =
+			textElement.scrollTop + textElement.clientHeight >=
+			textElement.scrollHeight - SCROLL_TOLERANCE;
 
-        if ((deltaY > 0 && !atBottom) || (deltaY < 0 && !atTop)) {
-            textElement.scrollBy({ top: deltaY, left: 0, behavior: 'auto' })
-            return
-        }
+		if ((deltaY > 0 && !atBottom) || (deltaY < 0 && !atTop)) {
+			textElement.scrollBy({ top: deltaY, left: 0, behavior: "auto" });
+			return;
+		}
 
-        if (commentsAtTime.length > 1 && Math.abs(deltaY) >= SWITCH_THRESHOLD) {
-            const direction = deltaY > 0 ? 1 : -1
-            const newIndex = (currentIndex + direction + commentsAtTime.length) % commentsAtTime.length
-            switchTo(newIndex)
-        }
-        return
-    }
+		if (commentsAtTime.length > 1 && Math.abs(deltaY) >= SWITCH_THRESHOLD) {
+			const direction = deltaY > 0 ? 1 : -1;
+			const newIndex =
+				(currentIndex + direction + commentsAtTime.length) %
+				commentsAtTime.length;
+			switchTo(newIndex);
+		}
+		return;
+	}
 
-    if (commentsAtTime.length > 1 && Math.abs(deltaY) >= SWITCH_THRESHOLD) {
-        const direction = deltaY > 0 ? 1 : -1
-        const newIndex = (currentIndex + direction + commentsAtTime.length) % commentsAtTime.length
-        switchTo(newIndex)
-    }
+	if (commentsAtTime.length > 1 && Math.abs(deltaY) >= SWITCH_THRESHOLD) {
+		const direction = deltaY > 0 ? 1 : -1;
+		const newIndex =
+			(currentIndex + direction + commentsAtTime.length) %
+			commentsAtTime.length;
+		switchTo(newIndex);
+	}
 }
 
 function createDebouncedCommentOpener() {
-    let lastOpenedAt = 0
-    const DEBOUNCE_MS = WHEEL_DEBOUNCE_MS
+	let lastOpenedAt = 0;
+	const DEBOUNCE_MS = WHEEL_DEBOUNCE_MS;
 
-    return (comment) => {
-        const now = Date.now()
-        if (now - lastOpenedAt < DEBOUNCE_MS) return
-        lastOpenedAt = now
+	return (comment) => {
+		const now = Date.now();
+		if (now - lastOpenedAt < DEBOUNCE_MS) return;
+		lastOpenedAt = now;
 
-        const videoId = activeVideoId || getVideoId()
-        const commentId = comment?.commentId
-        if (videoId && commentId) {
-            window.open(`https://www.youtube.com/watch?v=${videoId}&lc=${commentId}`, '_blank')
-        }
-    }
+		const videoId = activeVideoId || getVideoId();
+		const commentId = comment?.commentId;
+		if (videoId && commentId) {
+			window.open(
+				`https://www.youtube.com/watch?v=${videoId}&lc=${commentId}`,
+				"_blank",
+			);
+		}
+	};
 }
 
-// Our tick layer is a child of the controls container, next to the progress bar rather than
+// Our dots layer is a child of the controls container, next to the progress bar rather than
 // inside it: YouTube empties and rebuilds the progress bar's own children at will.
-function getBarMountPoint(player) {
-    return player?.querySelector('.ytp-chrome-bottom') || player || null
+function getDotsMountPoint(player) {
+	return player?.querySelector(".ytp-chrome-bottom") || player || null;
 }
 
-function getOrCreateBar() {
-    const mount = getBarMountPoint(getPlayer())
-    if (!mount) return null
+function getOrCreateDots() {
+	const mount = getDotsMountPoint(getPlayer());
+	if (!mount) return null;
 
-    let bar = mount.querySelector(':scope > .__youtube-timestamps__bar')
-    if (!bar) {
-        bar = document.createElement('div')
-        bar.classList.add('__youtube-timestamps__bar')
-        mount.insertAdjacentElement('afterbegin', bar)
-        log('mounted tick layer in', mount.className || mount.tagName)
-    }
-    return bar
+	let dots = mount.querySelector(":scope > .__youtube-timestamps__dots");
+	if (!dots) {
+		dots = document.createElement("div");
+		dots.classList.add("__youtube-timestamps__dots");
+		mount.insertAdjacentElement("afterbegin", dots);
+		log("mounted dots layer in", mount.className || mount.tagName);
+	}
+	return dots;
 }
 
 // Sizes the layer to sit exactly on YouTube's progress bar, whatever the player layout is.
-function layoutBar(bar) {
-    const progressBar = getProgressBar()
-    const parent = bar.parentElement
-    if (!progressBar || !parent) return
+function layoutDots(dots) {
+	const progressBar = getProgressBar();
+	const parent = dots.parentElement;
+	if (!progressBar || !parent) return;
 
-    const pb = progressBar.getBoundingClientRect()
-    if (!(pb.width > 0)) return
-    const pr = parent.getBoundingClientRect()
-    if (!(pr.width > 0)) return   // controls hidden (e.g. player still in miniplayer layout): try again later
+	const pb = progressBar.getBoundingClientRect();
+	if (!(pb.width > 0)) return;
+	const pr = parent.getBoundingClientRect();
+	if (!(pr.width > 0)) return; // controls hidden (e.g. player still in miniplayer layout): try again later
 
-    const left = pb.left - pr.left
-    const top = pb.top - pr.top
-    const height = Math.max(pb.height, 3)
-    const key = [left, top, pb.width, height].map(Math.round).join(',')
-    if (bar.dataset.layout === key) return
+	const left = pb.left - pr.left;
+	const top = pb.top - pr.top;
+	const height = Math.max(pb.height, 3);
+	const key = [left, top, pb.width, height].map(Math.round).join(",");
+	if (dots.dataset.layout === key) return;
 
-    bar.dataset.layout = key
-    log('tick layer layout', key, '| progress bar inside our controls:', parent.contains(progressBar))
-    bar.style.left = left + 'px'
-    bar.style.top = top + 'px'
-    bar.style.width = pb.width + 'px'
-    bar.style.height = height + 'px'
+	dots.dataset.layout = key;
+	log(
+		"dots layer layout",
+		key,
+		"| progress bar inside our controls:",
+		parent.contains(progressBar),
+	);
+	dots.style.left = left + "px";
+	dots.style.top = top + "px";
+	dots.style.width = pb.width + "px";
+	dots.style.height = height + "px";
 }
 
-function removeBar() {
-    document.querySelectorAll('.__youtube-timestamps__bar').forEach(bar => bar.remove())
-    stampEntries = []
-    hidePreview()
+function removeDots() {
+	document
+		.querySelectorAll(".__youtube-timestamps__dots")
+		.forEach((dots) => dots.remove());
+	dotEntries = [];
+	hidePreview();
 }
 
 // Once the miniplayer has been used the player can contain more than one .ytp-progress-bar
 // (the miniplayer's comes first and is hidden again on the watch page). Measuring that one
-// puts the tick layer in the wrong place, so prefer the visible one inside the main controls.
+// puts the dots layer in the wrong place, so prefer the visible one inside the main controls.
 function getProgressBar(player = getPlayer()) {
-    if (!player) return null
-    const all = [...player.querySelectorAll('.ytp-progress-bar')]
-    const shown = (el) => el.getClientRects().length > 0 && el.getBoundingClientRect().width > 0
-    return all.find(el => el.closest('.ytp-chrome-bottom') && shown(el))
-        || all.find(el => shown(el))
-        || all.find(el => el.closest('.ytp-chrome-bottom'))
-        || all[0]
-        || null
+	if (!player) return null;
+	const all = [...player.querySelectorAll(".ytp-progress-bar")];
+	const shown = (el) =>
+		el.getClientRects().length > 0 && el.getBoundingClientRect().width > 0;
+	return (
+		all.find((el) => el.closest(".ytp-chrome-bottom") && shown(el)) ||
+		all.find((el) => shown(el)) ||
+		all.find((el) => el.closest(".ytp-chrome-bottom")) ||
+		all[0] ||
+		null
+	);
 }
 
 function isElementVisible(el) {
-    return !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden'
+	return (
+		!!el &&
+		el.getClientRects().length > 0 &&
+		getComputedStyle(el).visibility !== "hidden"
+	);
 }
 
 // YouTube's own hover tooltip (time + thumbnail), but only while it is actually on screen.
 // The preview does not depend on it: it is used as an anchor so the preview can sit above it.
 function getTooltip() {
-    const player = getPlayer()
-    if (!player) return null
-    for (const tooltip of player.querySelectorAll('.ytp-tooltip')) {
-        if (isElementVisible(tooltip)) return tooltip
-    }
-    return null
+	const player = getPlayer();
+	if (!player) return null;
+	for (const tooltip of player.querySelectorAll(".ytp-tooltip")) {
+		if (isElementVisible(tooltip)) return tooltip;
+	}
+	return null;
 }
 
 function getTooltipBgWidth() {
-    const tooltip = getTooltip()
-    const tooltipBg = tooltip?.querySelector('.ytp-tooltip-bg')
-    if (tooltipBg) {
-        const rect = tooltipBg.getBoundingClientRect()
-        if (rect?.width > 0) return rect.width
-    }
+	const tooltip = getTooltip();
+	const tooltipBg = tooltip?.querySelector(".ytp-tooltip-bg");
+	if (tooltipBg) {
+		const rect = tooltipBg.getBoundingClientRect();
+		if (rect?.width > 0) return rect.width;
+	}
 
-    const progressBar = getProgressBar()
-    const rect = progressBar?.getBoundingClientRect()
-    return rect?.width > 0 ? rect.width * 0.9 : PREVIEW_DEFAULT_WIDTH
+	const progressBar = getProgressBar();
+	const rect = progressBar?.getBoundingClientRect();
+	return rect?.width > 0 ? rect.width * 0.9 : PREVIEW_DEFAULT_WIDTH;
 }
 
 function applyPreviewWidth(preview, measuredWidth) {
-    let w = measuredWidth + PREVIEW_WIDTH_PADDING
+	let w = measuredWidth + PREVIEW_WIDTH_PADDING;
 
-    const computed = window.getComputedStyle(preview)
-    const minW = parseFloat(computed.minWidth) || 0
-    const maxW = parseFloat(computed.maxWidth) || Infinity
+	const computed = window.getComputedStyle(preview);
+	const minW = parseFloat(computed.minWidth) || 0;
+	const maxW = parseFloat(computed.maxWidth) || Infinity;
 
-    if (minW > 0) w = Math.max(w, minW)
-    if (maxW > 0 && isFinite(maxW)) w = Math.min(w, maxW)
+	if (minW > 0) w = Math.max(w, minW);
+	if (maxW > 0 && isFinite(maxW)) w = Math.min(w, maxW);
 
-    preview.style.width = Math.round(w) + 'px'
+	preview.style.width = Math.round(w) + "px";
 }
 
 function showPreview(timeComment, totalComments = 1, currentIndex = 0) {
-    if (!getPlayer()) return
+	if (!getPlayer()) return;
 
-    const preview = getOrCreatePreview()
-    preview.style.display = ''
-    preview.style.transform = 'translateY(0) scale(1)'
+	const preview = getOrCreatePreview();
+	preview.style.display = "";
+	preview.style.transform = "translateY(0) scale(1)";
 
-    preview.querySelector('.__youtube-timestamps__preview__avatar').src = timeComment.authorAvatar || ''
-    fillAuthorName(preview.querySelector('.__youtube-timestamps__preview__name'), timeComment)
+	preview.querySelector(".__youtube-timestamps__preview__avatar").src =
+		timeComment.authorAvatar || "";
+	fillAuthorName(
+		preview.querySelector(".__youtube-timestamps__preview__name"),
+		timeComment,
+	);
 
-    const metaNode = preview.querySelector('.__youtube-timestamps__preview__meta')
-    const metaText = buildMetaText(timeComment)
-    metaNode.textContent = metaText
-    metaNode.style.display = metaText ? '' : 'none'
+	const metaNode = preview.querySelector(
+		".__youtube-timestamps__preview__meta",
+	);
+	const metaText = buildMetaText(timeComment);
+	metaNode.textContent = metaText;
+	metaNode.style.display = metaText ? "" : "none";
 
-    const textNode = preview.querySelector('.__youtube-timestamps__preview__text')
-    textNode.innerHTML = ''
+	const textNode = preview.querySelector(
+		".__youtube-timestamps__preview__text",
+	);
+	textNode.innerHTML = "";
 
-    const rawText = timeComment.text || ''
-    const trimmedText = rawText.trim()
-    const safeText = trimmedText || '(no comment text)'
-    const safeFragment = timeComment.timestamp || ''
+	const rawText = timeComment.text || "";
+	const trimmedText = rawText.trim();
+	const safeText = trimmedText || "(no comment text)";
+	const safeFragment = timeComment.timestamp || "";
 
-    // trim() removes leading whitespace, so formatting offsets have to move with it
-    const leadingTrimmed = rawText.length - rawText.trimStart().length
-    const shiftRuns = (runs) => trimmedText
-        ? (runs || []).map(r => ({ ...r, start: r.start - leadingTrimmed, end: r.end - leadingTrimmed }))
-        : []
-    const styles = shiftRuns(timeComment.styles)
-    const emojis = shiftRuns(timeComment.emojis)
+	// trim() removes leading whitespace, so formatting offsets have to move with it
+	const leadingTrimmed = rawText.length - rawText.trimStart().length;
+	const shiftRuns = (runs) =>
+		trimmedText
+			? (runs || []).map((r) => ({
+					...r,
+					start: r.start - leadingTrimmed,
+					end: r.end - leadingTrimmed,
+				}))
+			: [];
+	const styles = shiftRuns(timeComment.styles);
+	const emojis = shiftRuns(timeComment.emojis);
 
-    textNode.style.opacity = safeText === '(no comment text)' ? '0.88' : '1'
-    textNode.appendChild(highlightTextFragment(safeText, safeFragment, styles, emojis))
+	textNode.style.opacity = safeText === "(no comment text)" ? "0.88" : "1";
+	textNode.appendChild(
+		highlightTextFragment(safeText, safeFragment, styles, emojis),
+	);
 
-    const navIndicator = preview.querySelector('.__youtube-timestamps__preview__nav')
-    if (totalComments > 1) {
-        navIndicator.textContent = `${currentIndex + 1} of ${totalComments} comments`
-        navIndicator.style.display = 'block'
-    } else {
-        navIndicator.style.display = 'none'
-    }
+	const navIndicator = preview.querySelector(
+		".__youtube-timestamps__preview__nav",
+	);
+	if (totalComments > 1) {
+		navIndicator.textContent = `${currentIndex + 1} of ${totalComments} comments`;
+		navIndicator.style.display = "block";
+	} else {
+		navIndicator.style.display = "none";
+	}
 
-    const measured = getTooltipBgWidth()
-    applyPreviewWidth(preview, measured)
+	const measured = getTooltipBgWidth();
+	applyPreviewWidth(preview, measured);
 
-    // The card is a flex column (see CSS): header and button keep their size, the text area takes
-    // what is left and scrolls. Only the cap needs setting. It grows by however much taller the header
-    // got from the stats line (the avatar already makes the header 24px), so the text area is exactly
-    // as tall with stats as without.
-    const headerNode = preview.querySelector('.__youtube-timestamps__preview__author')
-    const statsExtra = Math.max(0, headerNode.offsetHeight - PREVIEW_AVATAR_SIZE)
-    preview.style.height = ''
-    preview.style.minHeight = PREVIEW_MIN_HEIGHT + 'px'
-    preview.style.maxHeight = (PREVIEW_MAX_HEIGHT + PREVIEW_MARGINS_TOTAL + statsExtra) + 'px'
+	// The card is a flex column (see CSS): header and button keep their size, the text area takes
+	// what is left and scrolls. Only the cap needs setting. It grows by however much taller the header
+	// got from the stats line (the avatar already makes the header 24px), so the text area is exactly
+	// as tall with stats as without.
+	const headerNode = preview.querySelector(
+		".__youtube-timestamps__preview__author",
+	);
+	const statsExtra = Math.max(0, headerNode.offsetHeight - PREVIEW_AVATAR_SIZE);
+	preview.style.height = "";
+	preview.style.minHeight = PREVIEW_MIN_HEIGHT + "px";
+	preview.style.maxHeight =
+		PREVIEW_MAX_HEIGHT + PREVIEW_MARGINS_TOTAL + statsExtra + "px";
 
-    preview.dataset.measuredWidth = String(Math.round(measured))
-    layoutPreview(preview)
-    startPreviewLayoutLoop()
+	preview.dataset.measuredWidth = String(Math.round(measured));
+	layoutPreview(preview);
+	startPreviewLayoutLoop();
 }
 
-// Places the preview above the hovered stamp, clamped to the progress bar, and above YouTube's
+// Places the preview above the hovered dot, clamped to the progress bar, and above YouTube's
 // thumbnail tooltip when that is showing. Everything is measured from the live DOM each time.
 function layoutPreview(preview) {
-    const player = getPlayer()
-    const progressBar = getProgressBar(player)
-    if (!player || !progressBar) return
+	const player = getPlayer();
+	const progressBar = getProgressBar(player);
+	if (!player || !progressBar) return;
 
-    const playerRect = player.getBoundingClientRect()
-    const barRect = progressBar.getBoundingClientRect()
-    const tooltip = getTooltip()
-    const tooltipRect = tooltip ? tooltip.getBoundingClientRect() : null
+	const playerRect = player.getBoundingClientRect();
+	const barRect = progressBar.getBoundingClientRect();
+	const tooltip = getTooltip();
+	const tooltipRect = tooltip ? tooltip.getBoundingClientRect() : null;
 
-    const measured = getTooltipBgWidth()
-    if (String(Math.round(measured)) !== preview.dataset.measuredWidth) {
-        applyPreviewWidth(preview, measured)
-        preview.dataset.measuredWidth = String(Math.round(measured))
-    }
-    const width = preview.getBoundingClientRect().width || measured
-    const half = width / 2
+	const measured = getTooltipBgWidth();
+	if (String(Math.round(measured)) !== preview.dataset.measuredWidth) {
+		applyPreviewWidth(preview, measured);
+		preview.dataset.measuredWidth = String(Math.round(measured));
+	}
+	const width = preview.getBoundingClientRect().width || measured;
+	const half = width / 2;
 
-    let centerX
-    if (hoveredStamp?.isConnected) {
-        const stampRect = hoveredStamp.getBoundingClientRect()
-        centerX = stampRect.left + stampRect.width / 2
-    } else if (tooltipRect) {
-        centerX = tooltipRect.left + tooltipRect.width / 2
-    } else {
-        centerX = barRect.left + barRect.width / 2
-    }
-    centerX = Math.min(Math.max(centerX, barRect.left + half), barRect.right - half)
+	let centerX;
+	if (hoveredDot?.isConnected) {
+		const dotRect = hoveredDot.getBoundingClientRect();
+		centerX = dotRect.left + dotRect.width / 2;
+	} else if (tooltipRect) {
+		centerX = tooltipRect.left + tooltipRect.width / 2;
+	} else {
+		centerX = barRect.left + barRect.width / 2;
+	}
+	centerX = Math.min(
+		Math.max(centerX, barRect.left + half),
+		barRect.right - half,
+	);
 
-    const anchorTop = tooltipRect && tooltipRect.height > 0 ? tooltipRect.top : barRect.top
+	const anchorTop =
+		tooltipRect && tooltipRect.height > 0 ? tooltipRect.top : barRect.top;
 
-    preview.style.left = Math.round(centerX - half - playerRect.left - PREVIEW_BORDER_SIZE) + 'px'
-    preview.style.bottom = Math.round(playerRect.bottom - anchorTop + PREVIEW_MARGIN + PREVIEW_TOOLTIP_MARGIN) + 'px'
+	preview.style.left =
+		Math.round(centerX - half - playerRect.left - PREVIEW_BORDER_SIZE) + "px";
+	preview.style.bottom =
+		Math.round(
+			playerRect.bottom - anchorTop + PREVIEW_MARGIN + PREVIEW_TOOLTIP_MARGIN,
+		) + "px";
 }
 
 // Keeps the preview in place while it is visible (mouse moves, thumbnail loads, resize, fullscreen).
 function startPreviewLayoutLoop() {
-    if (previewRaf) return
-    const tick = () => {
-        previewRaf = 0
-        const preview = document.querySelector('.__youtube-timestamps__preview')
-        if (!preview || preview.style.display === 'none' || !preview.isConnected) return
+	if (previewRaf) return;
+	const tick = () => {
+		previewRaf = 0;
+		const preview = document.querySelector(".__youtube-timestamps__preview");
+		if (!preview || preview.style.display === "none" || !preview.isConnected)
+			return;
 
-        // A stamp that was rebuilt while hovered never gets its mouseleave
-        if (hoveredStamp && !hoveredStamp.isConnected) {
-            hidePreview()
-            return
-        }
-        layoutPreview(preview)
-        previewRaf = requestAnimationFrame(tick)
-    }
-    previewRaf = requestAnimationFrame(tick)
+		// A dot that was rebuilt while hovered never gets its mouseleave
+		if (hoveredDot && !hoveredDot.isConnected) {
+			hidePreview();
+			return;
+		}
+		layoutPreview(preview);
+		previewRaf = requestAnimationFrame(tick);
+	};
+	previewRaf = requestAnimationFrame(tick);
 }
 
 // The preview lives in our own layer inside the player, not inside YouTube's tooltip.
 function getOrCreatePreview() {
-    const player = getPlayer()
-    if (!player) return document.createElement('div')
+	const player = getPlayer();
+	if (!player) return document.createElement("div");
 
-    document.querySelectorAll('.__youtube-timestamps__preview-host').forEach(host => {
-        if (host.parentElement !== player) host.remove()
-    })
+	document
+		.querySelectorAll(".__youtube-timestamps__preview-host")
+		.forEach((host) => {
+			if (host.parentElement !== player) host.remove();
+		});
 
-    let host = player.querySelector(':scope > .__youtube-timestamps__preview-host')
-    if (!host) {
-        host = document.createElement('div')
-        host.classList.add('__youtube-timestamps__preview-host')
-        player.appendChild(host)
-    }
+	let host = player.querySelector(
+		":scope > .__youtube-timestamps__preview-host",
+	);
+	if (!host) {
+		host = document.createElement("div");
+		host.classList.add("__youtube-timestamps__preview-host");
+		player.appendChild(host);
+	}
 
-    let preview = host.querySelector('.__youtube-timestamps__preview')
-    if (!preview) {
-        preview = createPreviewElement()
-        host.appendChild(preview)
-    }
-    return preview
+	let preview = host.querySelector(".__youtube-timestamps__preview");
+	if (!preview) {
+		preview = createPreviewElement();
+		host.appendChild(preview);
+	}
+	return preview;
 }
 
 function createPreviewElement() {
-    const preview = document.createElement('div')
-    preview.classList.add('__youtube-timestamps__preview')
+	const preview = document.createElement("div");
+	preview.classList.add("__youtube-timestamps__preview");
 
-    const authorElement = document.createElement('div')
-    authorElement.classList.add('__youtube-timestamps__preview__author')
-    preview.appendChild(authorElement)
+	const authorElement = document.createElement("div");
+	authorElement.classList.add("__youtube-timestamps__preview__author");
+	preview.appendChild(authorElement);
 
-    const avatarElement = document.createElement('img')
-    avatarElement.classList.add('__youtube-timestamps__preview__avatar')
-    authorElement.appendChild(avatarElement)
+	const avatarElement = document.createElement("img");
+	avatarElement.classList.add("__youtube-timestamps__preview__avatar");
+	authorElement.appendChild(avatarElement);
 
-    // Name and the gray stats line form one column, so the avatar centres against both of them
-    const whoElement = document.createElement('div')
-    whoElement.classList.add('__youtube-timestamps__preview__who')
-    authorElement.appendChild(whoElement)
+	// Name and the gray stats line form one column, so the avatar centres against both of them
+	const whoElement = document.createElement("div");
+	whoElement.classList.add("__youtube-timestamps__preview__who");
+	authorElement.appendChild(whoElement);
 
-    const nameElement = document.createElement('span')
-    nameElement.classList.add('__youtube-timestamps__preview__name')
-    whoElement.appendChild(nameElement)
+	const nameElement = document.createElement("span");
+	nameElement.classList.add("__youtube-timestamps__preview__name");
+	whoElement.appendChild(nameElement);
 
-    const metaElement = document.createElement('div')
-    metaElement.classList.add('__youtube-timestamps__preview__meta')
-    metaElement.style.display = 'none'
-    whoElement.appendChild(metaElement)
+	const metaElement = document.createElement("div");
+	metaElement.classList.add("__youtube-timestamps__preview__meta");
+	metaElement.style.display = "none";
+	whoElement.appendChild(metaElement);
 
-    const textElement = document.createElement('div')
-    textElement.classList.add('__youtube-timestamps__preview__text')
-    preview.appendChild(textElement)
+	const textElement = document.createElement("div");
+	textElement.classList.add("__youtube-timestamps__preview__text");
+	preview.appendChild(textElement);
 
-    const navElement = document.createElement('div')
-    navElement.classList.add('__youtube-timestamps__preview__nav')
-    navElement.style.display = 'none'
-    preview.appendChild(navElement)
+	const navElement = document.createElement("div");
+	navElement.classList.add("__youtube-timestamps__preview__nav");
+	navElement.style.display = "none";
+	preview.appendChild(navElement);
 
-    textElement.addEventListener('wheel', (ev) => {
-        if (textElement.scrollHeight > textElement.clientHeight) {
-            if (ev.cancelable) ev.preventDefault()
-            textElement.scrollBy({ top: ev.deltaY, left: 0, behavior: 'auto' })
-        }
-    }, { passive: false })
+	textElement.addEventListener(
+		"wheel",
+		(ev) => {
+			if (textElement.scrollHeight > textElement.clientHeight) {
+				if (ev.cancelable) ev.preventDefault();
+				textElement.scrollBy({ top: ev.deltaY, left: 0, behavior: "auto" });
+			}
+		},
+		{ passive: false },
+	);
 
-    return preview
+	return preview;
 }
 
 function highlightTextFragment(text, fragment, styles, emojis) {
-    const safeText = String(text)
-    const safeFragment = String(fragment)
+	const safeText = String(text);
+	const safeFragment = String(fragment);
 
-    return createStyledFragment(safeText, styles, (ts) => {
-        const isActive = !!safeFragment && ts === safeFragment
-        if (!isActive && parseTimestampToSeconds(ts) == null) return null
+	return createStyledFragment(
+		safeText,
+		styles,
+		(ts) => {
+			const isActive = !!safeFragment && ts === safeFragment;
+			if (!isActive && parseTimestampToSeconds(ts) == null) return null;
 
-        const span = document.createElement('span')
-        span.classList.add(isActive
-            ? '__youtube-timestamps__preview__text-stamp'
-            : '__youtube-timestamps__preview__text-link')
-        return span
-    }, emojis)
+			const span = document.createElement("span");
+			span.classList.add(
+				isActive
+					? "__youtube-timestamps__preview__text-stamp"
+					: "__youtube-timestamps__preview__text-link",
+			);
+			return span;
+		},
+		emojis,
+	);
 }
 
 function hidePreview() {
-    hoveredEntry?.el.classList.remove('__youtube-timestamps__stamp--hover')
-    hoveredEntry = null
-    hoveredStamp = null
-    document.querySelectorAll('.__youtube-timestamps__preview').forEach(preview => {
-        preview.style.display = 'none'
-    })
+	hoveredEntry?.el.classList.remove("__youtube-timestamps__dot--hover");
+	hoveredEntry = null;
+	hoveredDot = null;
+	document
+		.querySelectorAll(".__youtube-timestamps__preview")
+		.forEach((preview) => {
+			preview.style.display = "none";
+		});
 }
 
 function withWheelThrottle(callback) {
-    let deltaYAcc = 0
-    let afRequested = false
+	let deltaYAcc = 0;
+	let afRequested = false;
 
-    return (e) => {
-        e.stopPropagation()
-        if (e.cancelable) e.preventDefault()
-        deltaYAcc += e.deltaY
+	return (e) => {
+		e.stopPropagation();
+		if (e.cancelable) e.preventDefault();
+		deltaYAcc += e.deltaY;
 
-        if (afRequested) return
-        afRequested = true
+		if (afRequested) return;
+		afRequested = true;
 
-        window.requestAnimationFrame(() => {
-            callback(deltaYAcc)
-            deltaYAcc = 0
-            afRequested = false
-        })
-    }
+		window.requestAnimationFrame(() => {
+			callback(deltaYAcc);
+			deltaYAcc = 0;
+			afRequested = false;
+		});
+	};
 }
 
 function parseParams(href) {
-    const paramString = href.split('#')[0].split('?')[1]
-    const params = {}
+	const paramString = href.split("#")[0].split("?")[1];
+	const params = {};
 
-    if (paramString) {
-        for (const kv of paramString.split('&')) {
-            const [key, value] = kv.split('=')
-            params[key] = value
-        }
-    }
-    return params
+	if (paramString) {
+		for (const kv of paramString.split("&")) {
+			const [key, value] = kv.split("=");
+			params[key] = value;
+		}
+	}
+	return params;
 }
 
 // Navigation events only *nudge* sync(); the timer below is the safety net for when YouTube
 // changes the page without firing them (or fires them in an unexpected order).
-window.addEventListener('yt-navigate-start', () => {
-    hidePreview()
-})
+window.addEventListener("yt-navigate-start", () => {
+	hidePreview();
+});
 
-window.addEventListener('yt-navigate-finish', () => {
-    sync()
-})
+window.addEventListener("yt-navigate-finish", () => {
+	sync();
+});
 
-window.addEventListener('popstate', () => {
-    sync()
-})
+window.addEventListener("popstate", () => {
+	sync();
+});
 
 // timeupdate doesn't bubble, but a capture listener on document sees it from any <video>.
 // This survives YouTube swapping or re-parenting the video element (miniplayer, ads...).
-document.addEventListener('timeupdate', (event) => {
-    const target = event.target
-    if (!commentsReady || !target || target.tagName !== 'VIDEO' || !target.closest('#movie_player')) return
-    handleTimeUpdate(event)
-}, true)
+document.addEventListener(
+	"timeupdate",
+	(event) => {
+		const target = event.target;
+		if (
+			!commentsReady ||
+			!target ||
+			target.tagName !== "VIDEO" ||
+			!target.closest("#movie_player")
+		)
+			return;
+		handleTimeUpdate(event);
+	},
+	true,
+);
 
-window.addEventListener('resize', scheduleReattach)
-document.addEventListener('fullscreenchange', scheduleReattach)
+window.addEventListener("resize", scheduleReattach);
+document.addEventListener("fullscreenchange", scheduleReattach);
 
 setInterval(() => {
-    if (!document.hidden) sync()
-}, WATCHDOG_INTERVAL_MS)
+	if (!document.hidden) sync();
+}, WATCHDOG_INTERVAL_MS);
 
-sync()
+sync();

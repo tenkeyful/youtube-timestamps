@@ -105,6 +105,173 @@ function collectDetailFields(payload, removals) {
 	return true;
 }
 
+// Comment source. Defaults (Innertube, scan limit applies) are stored as an absent key.
+function collectSourceFields(payload, removals) {
+	const backend = document.getElementById("fetchBackend").value;
+	if (backend === "") removals.push("fetchBackend");
+	else if (backend === "dataApi") payload.fetchBackend = "dataApi";
+	else return false;
+
+	if (document.getElementById("unlimitedScan").checked)
+		payload.unlimitedScan = true;
+	else removals.push("unlimitedScan");
+
+	const sort = document.getElementById("commentSort").value;
+	if (sort === "") removals.push("commentSort");
+	else if (sort === "newest" || sort === "both") payload.commentSort = sort;
+	else return false;
+
+	// Data API quota one video may spend: empty = no cap
+	const budgetRaw = document.getElementById("quotaBudget").value;
+	if (budgetRaw === "") {
+		removals.push("quotaBudget");
+	} else {
+		const v = parseInt(budgetRaw, 10);
+		if (!isValidInt(v, 10)) return false;
+		payload.quotaBudget = v;
+	}
+
+	// Experimental timestamp search: off = key removed
+	if (document.getElementById("dataApiSearch").checked)
+		payload.dataApiSearch = true;
+	else removals.push("dataApiSearch");
+
+	// How long a finished scan is kept: empty = the default (1 day)
+	const ttl = document.getElementById("cacheTtl").value;
+	if (ttl === "") removals.push("cacheTtl");
+	else if (CACHE_TTL_VALUES.includes(ttl)) payload.cacheTtl = ttl;
+	else return false;
+	return true;
+}
+
+const CACHE_TTL_VALUES = ["off", "1h", "6h", "1w"];
+// Same names as background/cache.js (this page cannot import it)
+const CACHE_PREFIX = "scanCache:";
+const CACHE_INDEX_KEY = "scanCacheIndex";
+
+// The API key is a secret: it goes to storage.local so it is never synced to other devices.
+async function persistLocalFields() {
+	const key = document.getElementById("dataApiKey").value.trim();
+	if (key) await browser.storage.local.set({ dataApiKey: key });
+	else await browser.storage.local.remove("dataApiKey");
+}
+
+function syncSourceControls() {
+	const dataApi = document.getElementById("fetchBackend").value === "dataApi";
+	for (const card of document.querySelectorAll(".data-api-only")) {
+		card.style.display = dataApi ? "" : "none";
+	}
+	document.getElementById("maxResults").disabled =
+		document.getElementById("unlimitedScan").checked;
+}
+
+const STOP_TEXT = {
+	end: "reached the end of the comments",
+	limit: "stopped at the scan limit",
+	budget: "stopped at the quota budget",
+	aborted: "stopped because you left the video",
+	error: "stopped by an error",
+};
+
+const fmt = (n) => Number(n).toLocaleString("en");
+
+function ageText(ms) {
+	const minutes = Math.round(ms / 60000);
+	if (minutes < 1) return "just now";
+	if (minutes < 60) return `${minutes} min ago`;
+	const hours = Math.round(minutes / 60);
+	if (hours < 48) return `${hours} h ago`;
+	return `${Math.round(hours / 24)} days ago`;
+}
+
+function describeFetchStatus(status, now = Date.now()) {
+	if (!status || typeof status !== "object") return "";
+	const search = status.mode === "search";
+	let head = `Last scan: ${status.backend === "dataApi" ? "Data API" : "Innertube"}`;
+	if (search) head += " timestamp search";
+	else if (status.sort === "both") head += " (Top + Newest)";
+	else if (status.sort === "newest") head += " (Newest)";
+	const parts = [head];
+	if (status.fromCache && status.cachedAt)
+		parts.push(`from a saved scan (${ageText(now - status.cachedAt)})`);
+	parts.push(`${fmt(status.scanned ?? 0)} comments scanned`);
+	// the total counts replies too, so it is only context, not a percentage
+	if (Number.isFinite(status.total))
+		parts.push(
+			`the video has about ${fmt(status.total)} in total, with replies`,
+		);
+	if (search && status.termsTotal)
+		parts.push(
+			`searched ${fmt(status.termsSearched)} of ${fmt(status.termsTotal)} timestamps`,
+		);
+	parts.push(`${fmt(status.timestamps ?? 0)} timestamps found`);
+	if (!status.fromCache && status.backend === "dataApi" && status.units > 0) {
+		parts.push(
+			`${fmt(status.units)} quota units${status.quotaBudget ? ` of ${fmt(status.quotaBudget)}` : ""}`,
+		);
+	}
+	if (status.fromCache && status.savedUnits)
+		parts.push(
+			`this visit cost no quota (the scan itself cost ${fmt(status.savedUnits)} units)`,
+		);
+	if (STOP_TEXT[status.stopped]) parts.push(STOP_TEXT[status.stopped]);
+	if (status.error) parts.push(`(${status.error})`);
+	let text = parts.join(" · ");
+	if (status.requestedSort === "newest" && status.sort === "top")
+		text +=
+			" — Newest first was not available from YouTube for this video, so Top comments were scanned.";
+	if (
+		status.requestedSort === "both" &&
+		status.sort === "top" &&
+		!search &&
+		(status.stopped === "limit" || status.stopped === "budget")
+	)
+		text +=
+			" — Newest first was not available from YouTube for this video, so only the Top half was scanned.";
+	if (
+		status.requestedSearch &&
+		status.requestedBackend === "dataApi" &&
+		!search &&
+		!status.fromCache &&
+		status.backend === "dataApi"
+	)
+		text +=
+			" — Timestamp search needs the video's length, which the API did not give, so a normal scan was used.";
+	if (status.missingKey)
+		text +=
+			" — Data API is selected but no key is saved, so Innertube was used.";
+	else if (status.fellBack)
+		text += ` — the Data API did not work (${status.dataApiError}), so Innertube was used.`;
+	return text;
+}
+
+// "3 videos, 1.2 MB" for the Saved Scans card
+async function describeCache() {
+	const { [CACHE_INDEX_KEY]: index } =
+		await browser.storage.local.get(CACHE_INDEX_KEY);
+	const entries = Object.values(
+		index && typeof index === "object" ? index : {},
+	);
+	if (entries.length === 0) return "Nothing saved yet.";
+	const bytes = entries.reduce((sum, e) => sum + (e.bytes || 0), 0);
+	const size =
+		bytes >= 100 * 1024
+			? `${(bytes / 1048576).toFixed(1)} MB`
+			: `${Math.max(1, Math.round(bytes / 1024))} KB`;
+	return `Saved: ${entries.length} video${entries.length === 1 ? "" : "s"}, about ${size}.`;
+}
+
+async function clearSavedScans() {
+	const all = await browser.storage.local.get(null);
+	const keys = Object.keys(all).filter(
+		(k) => k.startsWith(CACHE_PREFIX) || k === CACHE_INDEX_KEY,
+	);
+	if (keys.length) await browser.storage.local.remove(keys);
+	const count = keys.filter((k) => k.startsWith(CACHE_PREFIX)).length;
+	document.getElementById("cacheStatus").textContent =
+		`Cleared ${count} saved scan${count === 1 ? "" : "s"}.`;
+}
+
 async function persistFilterRemovals(removals) {
 	if (removals.length) await browser.storage.sync.remove(removals);
 }
@@ -114,6 +281,7 @@ function debouncedSave() {
 
 	saveTimeout = setTimeout(async () => {
 		const payload = {};
+		const removals = [];
 		const maxResultsRaw = document.getElementById("maxResults").value;
 		const maxConcurrentRaw = document.getElementById(
 			"maxConcurrentOverlays",
@@ -125,6 +293,8 @@ function debouncedSave() {
 			const v = parseInt(maxResultsRaw, 10);
 			if (isValidInt(v, 1)) payload.maxResults = v;
 			else return;
+		} else {
+			removals.push("maxResults");
 		}
 
 		if (maxConcurrentRaw !== "") {
@@ -145,17 +315,18 @@ function debouncedSave() {
 			else return;
 		}
 
-		const removals = [];
 		if (!collectFilterFields(payload, removals)) return;
 		if (!collectAppearanceFields(payload, removals)) return;
 		if (!collectBehaviorFields(payload, removals)) return;
 		if (!collectDetailFields(payload, removals)) return;
+		if (!collectSourceFields(payload, removals)) return;
 
 		try {
 			await persistFilterRemovals(removals);
 			if (Object.keys(payload).length > 0) {
 				await browser.storage.sync.set(payload);
 			}
+			await persistLocalFields();
 		} catch (err) {}
 	}, 500);
 }
@@ -174,10 +345,42 @@ async function restoreOptions() {
 			"overlayAnimationAxis",
 			"excludeReplies",
 			"authorNameMode",
+			"fetchBackend",
+			"unlimitedScan",
+			"commentSort",
+			"quotaBudget",
+			"dataApiSearch",
+			"cacheTtl",
 			...DETAIL_CHECKBOXES,
 			...FILTER_FIELDS,
 		];
 		const items = await browser.storage.sync.get(keys);
+		const local = await browser.storage.local.get([
+			"dataApiKey",
+			"lastFetchStatus",
+		]);
+		document.getElementById("fetchBackend").value =
+			items.fetchBackend === "dataApi" ? "dataApi" : "";
+		document.getElementById("unlimitedScan").checked =
+			items.unlimitedScan === true;
+		document.getElementById("commentSort").value =
+			items.commentSort === "newest" || items.commentSort === "both"
+				? items.commentSort
+				: "";
+		document.getElementById("quotaBudget").value = items.quotaBudget ?? "";
+		document.getElementById("dataApiSearch").checked =
+			items.dataApiSearch === true;
+		document.getElementById("cacheTtl").value = CACHE_TTL_VALUES.includes(
+			items.cacheTtl,
+		)
+			? items.cacheTtl
+			: "";
+		document.getElementById("dataApiKey").value = local.dataApiKey ?? "";
+		document.getElementById("fetchStatus").textContent = describeFetchStatus(
+			local.lastFetchStatus,
+		);
+		document.getElementById("cacheStatus").textContent = await describeCache();
+		syncSourceControls();
 
 		if (items.hasOwnProperty("maxResults")) {
 			document.getElementById("maxResults").value = items.maxResults;
@@ -239,6 +442,7 @@ async function saveOptionsManual() {
 		saveTimeout = null;
 	}
 	const payload = {};
+	const removals = [];
 	const maxResultsRaw = document.getElementById("maxResults").value;
 	const maxConcurrentRaw = document.getElementById(
 		"maxConcurrentOverlays",
@@ -250,6 +454,8 @@ async function saveOptionsManual() {
 		const v = parseInt(maxResultsRaw, 10);
 		if (!isValidInt(v, 1)) return alert("Max comments must be an integer ≥ 1");
 		payload.maxResults = v;
+	} else {
+		removals.push("maxResults");
 	}
 	if (maxConcurrentRaw !== "") {
 		const v = parseInt(maxConcurrentRaw, 10);
@@ -270,7 +476,6 @@ async function saveOptionsManual() {
 		payload.overlayOpacity = v;
 	}
 
-	const removals = [];
 	if (!collectFilterFields(payload, removals)) {
 		return alert(
 			"Timestamp filters must be an integer ≥ 2 (or empty to turn off)",
@@ -287,12 +492,18 @@ async function saveOptionsManual() {
 	if (!collectDetailFields(payload, removals)) {
 		return alert("Author Name must be one of the listed choices");
 	}
+	if (!collectSourceFields(payload, removals)) {
+		return alert(
+			"Comment Source, Comment Order and Saved Scans must be one of the listed choices, and the quota budget a whole number of at least 10",
+		);
+	}
 
 	try {
 		await persistFilterRemovals(removals);
 		if (Object.keys(payload).length > 0) {
 			await browser.storage.sync.set(payload);
 		}
+		await persistLocalFields();
 		const status = document.getElementById("status") || createStatusNode();
 		status.textContent = "Options saved.";
 		setTimeout(() => {
@@ -345,12 +556,26 @@ document.addEventListener("DOMContentLoaded", () => {
 		"overlayAnimationAxis",
 		"excludeReplies",
 		"authorNameMode",
+		"fetchBackend",
+		"dataApiKey",
+		"unlimitedScan",
+		"commentSort",
+		"quotaBudget",
+		"dataApiSearch",
+		"cacheTtl",
 		...DETAIL_CHECKBOXES,
 	]) {
 		const el = document.getElementById(id);
 		el.addEventListener("input", debouncedSave);
 		el.addEventListener("change", debouncedSave);
 	}
+	for (const id of ["fetchBackend", "unlimitedScan"]) {
+		document.getElementById(id).addEventListener("change", syncSourceControls);
+	}
+
+	document
+		.getElementById("clearCache")
+		.addEventListener("click", clearSavedScans);
 
 	const saveButton = document.getElementById("saveOptions");
 	if (saveButton) {

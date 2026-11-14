@@ -2,120 +2,252 @@ const INNERTUBE_API_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
 const INNERTUBE_CLIENT_NAME = "WEB";
 const INNERTUBE_CLIENT_VERSION = "2.20211129.09.00";
 
-export async function fetchComments(videoId) {
-	const videoResponse = await fetchVideo(videoId);
+// How many top-level comments are scanned when the user never chose a number.
+export const DEFAULT_SCAN_LIMIT = 500;
+const REPLY_CONCURRENCY = 4;
+
+// Scans the video's comments (in YouTube's own order) until `limit` top-level comments have been
+// read or the list ends, and hands every parsed comment to onBatch as it arrives, so the caller can
+// show results long before a huge scan finishes. Replies are fetched alongside, never counted in
+// `limit`, and not at all when excludeReplies is set.
+//
+// `sort` is "top" (YouTube's default) or "newest". Resolves to { scanned, stopped, error, sort }:
+//   stopped: "end" (no more comments) | "limit" | "aborted" | "error"
+//   error:   message when stopped is "error", or when only some reply threads failed
+//   sort:    the order actually read; "top" when "newest" was asked for but YouTube's response had
+//            no sort menu to switch with (with strictSort nothing is read then)
+// Throws if nothing could be read at all (bad first response), so the caller can retry later.
+export async function fetchComments(videoId, options = {}) {
+	const {
+		limit = DEFAULT_SCAN_LIMIT,
+		excludeReplies = false,
+		sort = "top",
+		strictSort = false,
+		signal,
+		onBatch = () => {},
+	} = options;
+
+	const videoResponse = await fetchVideo(videoId, signal);
 	let token = commentsContinuationToken(videoResponse);
 	if (!token) {
-		return [];
+		return { scanned: 0, stopped: "end", error: null, sort: "top" };
 	}
-	const { maxResults, excludeReplies } = await browser.storage.sync.get([
-		"maxResults",
-		"excludeReplies",
-	]);
-	const comments = [];
-	const allThreadItems = [];
+
+	const limiter = makeLimiter(REPLY_CONCURRENCY);
+	const replyJobs = [];
+	let scanned = 0;
 	let prevToken;
 	let pageCount = 0;
-	while (
-		prevToken !== token &&
-		pageCount < maxResults &&
-		comments.length < maxResults
-	) {
-		const commentsResponse = await fetchNext(token);
-		prevToken = token;
+	let stopped = "end";
+	let error = null;
+	let usedSort = "top";
+	let sortChecked = sort !== "newest";
 
-		const mutations =
-			commentsResponse.frameworkUpdates?.entityBatchUpdate?.mutations || [];
-		const mutationMap = new Map();
-		for (const m of mutations) {
-			if (m && m.entityKey) {
-				mutationMap.set(m.entityKey, m);
+	try {
+		while (prevToken !== token) {
+			if (signal?.aborted) {
+				stopped = "aborted";
+				break;
 			}
-		}
+			if (scanned >= limit) {
+				stopped = "limit";
+				break;
+			}
+			const commentsResponse = await fetchNext(token, signal);
+			prevToken = token;
 
-		const items =
-			pageCount === 0
-				? commentsResponse.onResponseReceivedEndpoints[1]
-						.reloadContinuationItemsCommand.continuationItems
-				: commentsResponse.onResponseReceivedEndpoints[0]
-						.appendContinuationItemsAction.continuationItems;
-		if (!items) {
-			break;
-		}
-
-		for (const item of items) {
-			if (item.commentThreadRenderer) {
-				allThreadItems.push(item);
-				const commentThreadRenderer = item.commentThreadRenderer;
-				if (commentThreadRenderer.comment) {
-					const cr = commentThreadRenderer.comment.commentRenderer;
-					const commentId = cr.commentId;
-					const authorName = cr.authorText?.simpleText;
-					const authorAvatar = cr.authorThumbnail?.thumbnails?.[0]?.url;
-					const text = cr.contentText?.runs
-						? legacyRunsToText(cr.contentText.runs)
-						: "";
-					const styles = styleRunsFromLegacyRuns(cr.contentText?.runs);
-					const emojis = emojiRunsFromLegacyRuns(cr.contentText?.runs);
-					comments.push({
-						commentId,
-						authorName,
-						authorAvatar,
-						text,
-						styles,
-						emojis,
-						...infoFromRenderer(cr),
-					});
-				} else if (commentThreadRenderer.commentViewModel) {
-					const commentViewModel =
-						commentThreadRenderer.commentViewModel.commentViewModel ||
-						commentThreadRenderer.commentViewModel;
-					const commentKey = commentViewModel?.commentKey;
-					const mutation = mutationMap.get(commentKey);
-					if (!mutation) continue;
-					const commentEntityPayload = mutation.payload?.commentEntityPayload;
-					if (!commentEntityPayload) continue;
-					const commentId = commentEntityPayload.properties?.commentId;
-					const authorName = commentEntityPayload.author?.displayName;
-					const authorAvatar = commentEntityPayload.author?.avatarThumbnailUrl;
-					const text = commentEntityPayload.properties?.content?.content;
-					const styles = styleRunsFromContent(
-						commentEntityPayload.properties?.content,
-					);
-					const emojis = emojiRunsFromContent(
-						commentEntityPayload.properties?.content,
-					);
-					comments.push({
-						commentId,
-						authorName,
-						authorAvatar,
-						text,
-						styles,
-						emojis,
-						...infoFromEntity(commentEntityPayload),
-					});
+			// The sort menu comes with the first page, which is in YouTube's default order. To read
+			// newest-first, drop that page and continue from the menu's token for that order.
+			if (!sortChecked) {
+				sortChecked = true;
+				const newest = findNewestSort(commentsResponse);
+				if (newest.current) {
+					usedSort = "newest";
+				} else if (newest.token) {
+					token = newest.token;
+					usedSort = "newest";
+					continue;
+				} else if (strictSort) {
+					// "Both orders" asks for Newest as a second pass; reading the default order again
+					// would only fetch the same comments twice, so stop without reading anything
+					return { scanned: 0, stopped: "end", error: null, sort: "top" };
 				}
-			} else if (item.continuationItemRenderer) {
-				token =
-					item.continuationItemRenderer.continuationEndpoint.continuationCommand
-						.token;
 			}
+
+			const mutationMap = mutationMapOf(commentsResponse);
+			const items = continuationItemsOf(commentsResponse);
+			if (items.length === 0) {
+				// Nothing at all on the first page means the response shape was not understood:
+				// fail loudly so the caller retries instead of caching "no comments"
+				if (pageCount === 0) throw new Error("unexpected comments response");
+				break;
+			}
+
+			const batch = [];
+			for (const item of items) {
+				if (item.commentThreadRenderer) {
+					if (scanned + batch.length >= limit) continue;
+					const comment = commentFromThread(item, mutationMap);
+					if (!comment) continue;
+					batch.push(comment);
+					if (!excludeReplies) {
+						const replyToken = extractReplyToken(item);
+						if (replyToken) {
+							replyJobs.push(
+								limiter(async () => {
+									if (signal?.aborted) return;
+									try {
+										const replies = await fetchReplies(replyToken, signal);
+										if (replies.length) onBatch(replies);
+									} catch (e) {
+										if (!signal?.aborted)
+											error = error || `replies: ${e.message || e}`;
+									}
+								}),
+							);
+						}
+					}
+				} else if (item.continuationItemRenderer) {
+					token = findToken(item.continuationItemRenderer) ?? token;
+				}
+			}
+			scanned += batch.length;
+			if (batch.length) onBatch(batch);
+			pageCount++;
 		}
-		pageCount++;
+	} catch (e) {
+		if (pageCount === 0) throw e;
+		stopped = signal?.aborted ? "aborted" : "error";
+		if (stopped === "error") error = e.message || String(e);
 	}
 
-	// Replies cost one or more extra requests per thread, so when they are excluded they are
-	// never fetched at all (not just filtered out afterwards)
-	if (!excludeReplies) {
-		for (const item of allThreadItems) {
-			const replyToken = extractReplyToken(item);
-			if (!replyToken) continue;
-			const replyComments = await fetchReplies(replyToken);
-			comments.push(...replyComments);
-		}
-	}
+	await Promise.all(replyJobs);
+	if (signal?.aborted) stopped = "aborted";
+	return { scanned, stopped, error, sort: usedSort };
+}
 
-	return comments;
+// Runs at most `max` async tasks at once; each call resolves with its own task's result
+function makeLimiter(max) {
+	let active = 0;
+	const queue = [];
+	const next = () => {
+		if (active >= max || queue.length === 0) return;
+		active++;
+		const { task, resolve, reject } = queue.shift();
+		task()
+			.then(resolve, reject)
+			.finally(() => {
+				active--;
+				next();
+			});
+	};
+	return (task) =>
+		new Promise((resolve, reject) => {
+			queue.push({ task, resolve, reject });
+			next();
+		});
+}
+
+// A continuation token sits in one of two places: on the item's own endpoint (the list loads
+// itself when scrolled into view) or on a "Show more replies" button's command. Reading only the
+// first shape is what makes a thread with dozens of replies stop after the first page
+// (Scrubber's source describes exactly this), so look for the token wherever it is.
+function findToken(node, depth = 0) {
+	if (!node || typeof node !== "object" || depth > 12) return null;
+	const token = node.continuationCommand?.token;
+	if (typeof token === "string" && token) return token;
+	for (const key in node) {
+		const found = findToken(node[key], depth + 1);
+		if (found) return found;
+	}
+	return null;
+}
+
+// The sort menu (Top / Newest) sits in the first page of comments; each option that is not the
+// selected one carries a continuation token for the list in that order. The titles are translated,
+// so options are told apart by position: Top is listed first and is selected by default, "Newest
+// first" is last. Shape taken from Scrubber's source, not verified against live YouTube data.
+function findNewestSort(response) {
+	const menu = findByKey(response, "sortFilterSubMenuRenderer");
+	const options = menu?.subMenuItems;
+	if (!Array.isArray(options) || options.length < 2)
+		return { token: null, current: false };
+	if (options[options.length - 1].selected)
+		return { token: null, current: true };
+	for (let i = options.length - 1; i >= 0; i--) {
+		if (options[i].selected) continue;
+		const token = findToken(options[i]);
+		if (token) return { token, current: false };
+	}
+	return { token: null, current: false };
+}
+
+function findByKey(node, key, depth = 0) {
+	if (!node || typeof node !== "object" || depth > 14) return null;
+	if (node[key]) return node[key];
+	for (const k in node) {
+		const found = findByKey(node[k], key, depth + 1);
+		if (found) return found;
+	}
+	return null;
+}
+
+function mutationMapOf(response) {
+	const mutations =
+		response?.frameworkUpdates?.entityBatchUpdate?.mutations || [];
+	const map = new Map();
+	for (const m of mutations) {
+		if (m && m.entityKey) map.set(m.entityKey, m);
+	}
+	return map;
+}
+
+// The first page carries several endpoints (a header with the sort menu, then the comments), later
+// pages carry one. Everything that is not a comment thread or a continuation is ignored by callers,
+// so simply read all of them.
+function continuationItemsOf(response) {
+	const items = [];
+	for (const endpoint of response?.onResponseReceivedEndpoints || []) {
+		const list =
+			endpoint.appendContinuationItemsAction?.continuationItems ||
+			endpoint.reloadContinuationItemsCommand?.continuationItems;
+		if (Array.isArray(list)) items.push(...list);
+	}
+	return items;
+}
+
+function commentFromThread(item, mutationMap) {
+	const commentThreadRenderer = item.commentThreadRenderer;
+	if (commentThreadRenderer.comment) {
+		const cr = commentThreadRenderer.comment.commentRenderer;
+		return {
+			commentId: cr.commentId,
+			authorName: cr.authorText?.simpleText,
+			authorAvatar: cr.authorThumbnail?.thumbnails?.[0]?.url,
+			text: cr.contentText?.runs ? legacyRunsToText(cr.contentText.runs) : "",
+			styles: styleRunsFromLegacyRuns(cr.contentText?.runs),
+			emojis: emojiRunsFromLegacyRuns(cr.contentText?.runs),
+			...infoFromRenderer(cr),
+		};
+	}
+	if (commentThreadRenderer.commentViewModel) {
+		const commentViewModel =
+			commentThreadRenderer.commentViewModel.commentViewModel ||
+			commentThreadRenderer.commentViewModel;
+		const mutation = mutationMap.get(commentViewModel?.commentKey);
+		const payload = mutation?.payload?.commentEntityPayload;
+		if (!payload) return null;
+		return {
+			commentId: payload.properties?.commentId,
+			authorName: payload.author?.displayName,
+			authorAvatar: payload.author?.avatarThumbnailUrl,
+			text: payload.properties?.content?.content,
+			styles: styleRunsFromContent(payload.properties?.content),
+			emojis: emojiRunsFromContent(payload.properties?.content),
+			...infoFromEntity(payload),
+		};
+	}
+	return null;
 }
 
 // Extra per-comment details that can be shown next to the text. All optional; empty string / false
@@ -152,7 +284,7 @@ function infoFromEntity(payload) {
 }
 
 // Only https image URLs are ever passed on to the page
-function httpsUrl(url) {
+export function httpsUrl(url) {
 	if (typeof url !== "string") return "";
 	if (url.startsWith("//")) url = "https:" + url;
 	return url.startsWith("https://") ? url : "";
@@ -320,8 +452,8 @@ function commentsContinuationToken(videoResponse) {
 		?.continuationEndpoint.continuationCommand.token;
 }
 
-async function fetchVideo(videoId) {
-	const response = await fetch(
+async function fetchVideo(videoId, signal) {
+	return await fetchJson(
 		`https://www.youtube.com/watch?v=${videoId}&pbj=1`,
 		{
 			credentials: "omit",
@@ -330,11 +462,11 @@ async function fetchVideo(videoId) {
 				"X-Youtube-Client-Version": INNERTUBE_CLIENT_VERSION,
 			},
 		},
+		signal,
 	);
-	return await response.json();
 }
 
-async function fetchNext(continuation) {
+async function fetchNext(continuation, signal) {
 	const body = {
 		context: {
 			client: {
@@ -344,7 +476,7 @@ async function fetchNext(continuation) {
 		},
 		continuation,
 	};
-	const response = await fetch(
+	return await fetchJson(
 		`https://www.youtube.com/youtubei/v1/next?key=${INNERTUBE_API_KEY}`,
 		{
 			method: "POST",
@@ -354,8 +486,40 @@ async function fetchNext(continuation) {
 			},
 			body: JSON.stringify(body),
 		},
+		signal,
 	);
-	return await response.json();
+}
+
+// A long scan makes thousands of requests; one hiccup (429, 5xx, dropped connection) must not
+// throw away everything read so far, so transient failures are retried with a growing pause.
+// Exported so tests can shrink the waits. timeoutMs: a request that hangs must not stall a scan
+// that is meant to run for minutes (CommenTime gives every request 15 s as well).
+export const net = { attempts: 3, baseMs: 600, timeoutMs: 20000 };
+
+async function fetchJson(url, init, signal) {
+	let lastError;
+	for (let attempt = 0; attempt < net.attempts; attempt++) {
+		if (signal?.aborted) throw new Error("aborted");
+		const timeout = AbortSignal.timeout(net.timeoutMs);
+		try {
+			const response = await fetch(url, {
+				...init,
+				signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+			});
+			if (response.ok) return await response.json();
+			lastError = new Error(`HTTP ${response.status}`);
+			if (response.status !== 429 && response.status < 500) break;
+		} catch (e) {
+			if (signal?.aborted) throw e;
+			lastError = timeout.aborted ? new Error("request timed out") : e;
+		}
+		if (attempt < net.attempts - 1) await sleep(net.baseMs * 2 ** attempt);
+	}
+	throw lastError;
+}
+
+function sleep(ms) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function extractReplyToken(item) {
@@ -366,6 +530,8 @@ function extractReplyToken(item) {
 		ctr.replies?.commentRepliesRenderer?.contents?.[0]?.continuationItemRenderer
 			?.continuationEndpoint?.continuationCommand?.token;
 	if (repliesContinuation) return repliesContinuation;
+	const walked = findToken(ctr.replies?.commentRepliesRenderer?.contents);
+	if (walked) return walked;
 
 	const replyCount =
 		ctr.commentViewModel?.commentViewModel?.replyCount ||
@@ -378,13 +544,13 @@ function extractReplyToken(item) {
 	return repliesToken || null;
 }
 
-async function fetchReplies(token) {
+async function fetchReplies(token, signal) {
 	const replies = [];
 	let currentToken = token;
 	let prevToken;
 
 	while (prevToken !== currentToken) {
-		const response = await fetchNext(currentToken);
+		const response = await fetchNext(currentToken, signal);
 		prevToken = currentToken;
 
 		const mutations =
@@ -433,9 +599,7 @@ async function fetchReplies(token) {
 					...infoFromEntity(payload),
 				});
 			} else if (item.continuationItemRenderer) {
-				const next =
-					item.continuationItemRenderer?.continuationEndpoint
-						?.continuationCommand?.token;
+				const next = findToken(item.continuationItemRenderer);
 				if (next) currentToken = next;
 			}
 		}

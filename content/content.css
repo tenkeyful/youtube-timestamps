@@ -1,5 +1,8 @@
-/* Tick layer: lives next to YouTube's progress bar and is sized to it by the script */
-.__youtube-timestamps__bar {
+/* Dots layer: lives next to YouTube's progress bar and is sized to it by the script.
+   The dots look like the timed-comment dots on YouTube mobile: every dot is the same small, pure white
+   circle sitting on the bar, and they all grow together while the cursor is on the bar.
+   Tuning: dots are drawn at --yt-dot-size and scaled for each state (size x scale). */
+.__youtube-timestamps__dots {
 	position: absolute;
 	left: 0;
 	top: 0;
@@ -7,40 +10,44 @@
 	height: 5px;
 	pointer-events: none;
 	z-index: 200;
+	--yt-dot-size: 6px;
+	--yt-dot-scale-rest: 0.5;     /* 3px: resting (half of the size below, the ratio measured on YouTube mobile) */
+	--yt-dot-scale-near: 1;       /* 6px: the cursor is on the progress bar */
+	--yt-dot-scale-hover: 1.5;    /* 9px: the cursor is on this dot */
 }
 
-.__youtube-timestamps__stamp {
-	background: rgba(255, 255, 255, 0.3);
-	height: 100%;
-	min-width: 2px;
-	max-width: 4px;
-	width: 0.4%;
+/* A dot is a fixed-size circle in BOTH directions, never a percentage of the bar's height, and every
+   state change is one uniform scale. YouTube makes its bar thicker when you hover it; anything sized
+   from the bar's height, or scaled differently along X and Y, would turn into an oval at that moment. */
+.__youtube-timestamps__dot {
+	--yt-dot-scale: var(--yt-dot-scale-rest);
 	position: absolute;
-	top: 0;
-	border-radius: 1px;
-	transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-	box-shadow: 0 0 0 rgba(255, 255, 255, 0.2);
+	top: 50%;                     /* left is set per dot; together with the translate this centres it on that point */
+	width: var(--yt-dot-size);
+	height: var(--yt-dot-size);
+	aspect-ratio: 1;
+	border-radius: 50%;
+	background: #fff;
+	transform: translate(-50%, -50%) scale(var(--yt-dot-scale));
+	/* only scale and glow animate: never width or height */
+	transition:
+		transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 	pointer-events: none;
 }
 
-.__youtube-timestamps__stamp.__youtube-timestamps__stamp--hover {
-	transform: scaleY(1.3) scaleX(1.2);
-	box-shadow: 0 0 4px rgba(255, 255, 255, 0.4);
-	background: rgba(255, 255, 255, 0.7);
+/* the cursor is on the progress bar: all dots grow */
+.__youtube-timestamps__dots--near .__youtube-timestamps__dot {
+	--yt-dot-scale: var(--yt-dot-scale-near);
 }
 
-.__youtube-timestamps__stamp--multiple {
-	background: rgba(255, 255, 255, 0.85);
-	min-width: 3px;
-	max-width: 6px;
-	width: 0.6%;
-	box-shadow: 0 0 3px rgba(255, 255, 255, 0.4);
+/* several comments at the same moment */
+.__youtube-timestamps__dot.__youtube-timestamps__dot--multiple {
+	background: var(--yt-sys-color-baseline--static-brand-red);
 }
 
-.__youtube-timestamps__stamp--multiple.__youtube-timestamps__stamp--hover {
-	transform: scaleY(1.4) scaleX(1.3);
-	box-shadow: 0 0 6px rgba(255, 255, 255, 0.9);
-	background: rgba(255, 255, 255, 0.8);
+/* the cursor is on this dot (its comment preview is showing) */
+.__youtube-timestamps__dot.__youtube-timestamps__dot--hover {
+	--yt-dot-scale: var(--yt-dot-scale-hover);
 }
 
 .__youtube-timestamps__preview-host {
