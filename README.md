@@ -33,6 +33,7 @@ Videos to test and stress test this add-on to its limit:
 - https://www.youtube.com/watch?v=_OgR98kqTJU
 - https://www.youtube.com/watch?v=-FTNbqxCfhA
 - https://www.youtube.com/watch?v=Z10GH-6IX1M
+- https://www.youtube.com/watch?v=gdZLi9oWNZg
 
 ---
 
